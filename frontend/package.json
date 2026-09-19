@@ -1,0 +1,24 @@
+{
+  "name": "apigw-frontend",
+  "private": true,
+  "description": "API Gateway Management Portal and Developer Portal",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:admin": "npm run dev -w management-portal",
+    "dev:partner": "npm run dev -w developer-portal",
+    "build": "npm run build -w management-portal && npm run build -w developer-portal",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}

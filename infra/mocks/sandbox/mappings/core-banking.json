@@ -1,0 +1,117 @@
+{
+  "mappings": [
+    {
+      "request": {
+        "method": "POST",
+        "urlPath": "/core/imps"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "txnId": "IMPS{{randomValue length=11 type='NUMERIC'}}",
+          "status": "ACCEPTED",
+          "rrn": "{{randomValue length=12 type='NUMERIC'}}",
+          "initiatedAt": "{{now}}",
+          "environment": "SANDBOX"
+        },
+        "fixedDelayMilliseconds": 180
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "urlPath": "/core/neft"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "txnId": "NEFT{{randomValue length=11 type='NUMERIC'}}",
+          "status": "PENDING",
+          "environment": "SANDBOX"
+        },
+        "fixedDelayMilliseconds": 220
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "urlPath": "/core/balance"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "accountNumber": "5010••••••4412",
+          "currency": "INR",
+          "balance": "184320.55",
+          "availableBalance": "184320.55",
+          "asOf": "{{now}}",
+          "environment": "SANDBOX"
+        },
+        "fixedDelayMilliseconds": 80
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "urlPath": "/core/statement"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "accountNumber": "5010••••••4412",
+          "transactionCount": 42,
+          "environment": "SANDBOX"
+        },
+        "fixedDelayMilliseconds": 900
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "urlPath": "/ref/ifsc"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "ifsc": "{{request.query.code}}",
+          "bank": "Example Bank",
+          "branch": "Fort, Mumbai",
+          "environment": "SANDBOX"
+        },
+        "fixedDelayMilliseconds": 20
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "urlPath": "/core/mandates"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "mandateId": "MND{{randomValue length=10 type='NUMERIC'}}",
+          "status": "REGISTERED",
+          "environment": "SANDBOX"
+        }
+      }
+    }
+  ]
+}

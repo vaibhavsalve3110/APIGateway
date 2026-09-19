@@ -1,0 +1,20 @@
+{
+  "name": "@apigw/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Design tokens, components, API client and sign-in shared by both portals",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "oidc-client-ts": "^3.5.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

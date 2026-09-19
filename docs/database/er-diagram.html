@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>API Gateway platform — ER diagram</title>
+<style>body{font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;margin:32px;color:#1a1f26;background:#f4f5f7}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:32px 0 8px}p{color:#5b6472;max-width:860px;line-height:1.55}
+.card{background:#fff;border:1px solid #dfe3e8;border-radius:8px;padding:16px;overflow-x:auto}</style></head><body>
+<h1>API Gateway platform — database ER diagram</h1>
+<p>Generated from docs/database/er-diagram.md. Open in a browser with internet access (Mermaid loads from a CDN).</p>
+<h2>Implemented — migration V1</h2><div class="card"><pre class="mermaid">erDiagram
+    PARTNER_GROUP ||--o{ PARTNER : "contains"
+    PARTNER ||--o{ SECURITY_KEY : "holds"
+    API_DEFINITION ||--o{ USAGE_EVENT : "logical: api_id"
+    PARTNER ||--o{ USAGE_EVENT : "logical: client_id"
+
+    PARTNER_GROUP {
+        uuid id PK
+        varchar name UK "e.g. Tier-1 Aggregators"
+        varchar description
+        varchar status "ACTIVE | DISABLED"
+        timestamptz created_at
+    }
+
+    PARTNER {
+        uuid id PK
+        varchar code UK "PTN-00001"
+        varchar name
+        uuid group_id FK
+        varchar access_tier "UAT_ONLY | PRODUCTION"
+        varchar status "ACTIVE | DISABLED"
+        varchar contact_email
+        varchar client_id_sandbox UK "rate limits counted per Client ID"
+        varchar client_id_production UK "null until Production is granted"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    SECURITY_KEY {
+        uuid id PK "also the gateway credential id"
+        uuid partner_id FK
+        varchar environment "SANDBOX | PRODUCTION"
+        varchar key_hash UK "SHA-256 only — key never stored"
+        varchar masked_key "agw_sbx_........abcd"
+        varchar status "ACTIVE | EXPIRING | EXPIRED | REVOKED"
+        timestamptz created_at
+        varchar created_by
+        timestamptz expires_at "end of 20-min overlap"
+        timestamptz ended_at
+    }
+
+    API_DEFINITION {
+        uuid id PK
+        varchar name
+        varchar category
+        varchar http_method "UK with proxy_path"
+        varchar proxy_path "UK with http_method"
+        varchar backend_url_sandbox
+        varchar backend_url_production
+        varchar status "DRAFT | ACTIVE | DISABLED"
+        boolean guest_visible "defaults to false"
+        int rate_limit_count
+        varchar rate_limit_window "MINUTE | HOUR | DAY"
+        varchar owner_team
+        varchar description
+        timestamptz disabled_at "starts the 7-day cooling period"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    USAGE_EVENT {
+        bigint id PK
+        timestamptz occurred_at "indexed; purged after 30 days"
+        uuid api_id "from gateway route id"
+        varchar environment
+        varchar client_id
+        int status_code
+        int latency_ms
+    }
+
+    AUDIT_EVENT {
+        bigint id PK
+        timestamptz occurred_at
+        varchar actor "username or System"
+        varchar actor_role
+        varchar action "CREATE, GENERATE, REVOKE, EXPIRE ..."
+        varchar object_type "API, PARTNER, SECURITY_KEY ..."
+        varchar object_id
+        varchar detail
+    }
+</pre></div>
+<h2>Planned — remaining BRD modules (proposal)</h2><div class="card"><pre class="mermaid">erDiagram
+    PRODUCT ||--o{ PRODUCT_API : "bundles"
+    API_DEFINITION ||--o{ PRODUCT_API : "is in"
+    PARTNER_GROUP ||--o{ ACCESS_MAPPING : "is granted"
+    PARTNER ||--o{ ACCESS_MAPPING : "is granted"
+    PRODUCT ||--o{ ACCESS_MAPPING : "via product"
+    API_DEFINITION ||--o{ ACCESS_MAPPING : "or directly"
+    ACCESS_MAPPING ||--|| APPROVAL_EVIDENCE : "requires"
+    DOMAIN ||--o{ DOMAIN_API : "exposes"
+    API_DEFINITION ||--o{ DOMAIN_API : "exposed on"
+    DOMAIN ||--o{ DOMAIN_RESTRICTION : "limits"
+    PARTNER ||--o{ DOMAIN_RESTRICTION : "limited to"
+    DOMAIN ||--o| TLS_CERTIFICATE : "serves"
+    API_DEFINITION ||--o{ API_ENDPOINT_DOC : "documents"
+    API_ENDPOINT_DOC ||--o{ API_FIELD_DOC : "has fields"
+    API_ENDPOINT_DOC ||--o{ API_RETURN_CODE : "returns"
+    PORTAL_PAGE ||--o{ PORTAL_PAGE_VERSION : "versions"
+
+    PRODUCT {
+        uuid id PK
+        varchar name UK
+        varchar slug UK
+        varchar status "DRAFT | PUBLISHED"
+        varchar description
+    }
+    PRODUCT_API {
+        uuid product_id PK, FK
+        uuid api_id PK, FK
+    }
+    ACCESS_MAPPING {
+        uuid id PK
+        uuid partner_group_id FK "one of group / partner"
+        uuid partner_id FK
+        uuid product_id FK "one of product / api"
+        uuid api_id FK
+        varchar environments "SANDBOX | BOTH"
+        uuid evidence_id FK "CP-RPT-06 — mandatory"
+        varchar mapped_by
+        timestamptz mapped_at
+    }
+    APPROVAL_EVIDENCE {
+        uuid id PK
+        varchar file_name
+        varchar content_type
+        varchar storage_ref "object store key"
+        varchar sha256 "tamper evidence"
+        varchar reference_note
+        varchar uploaded_by
+        timestamptz uploaded_at
+    }
+    DOMAIN {
+        uuid id PK
+        varchar fqdn UK
+        varchar purpose "GATEWAY | DEVELOPER_PORTAL"
+        varchar environment "SANDBOX | PRODUCTION"
+        varchar status "PENDING_VERIFICATION | ACTIVE | DISABLED"
+        varchar verification_token
+        boolean is_default
+        varchar owner_team
+    }
+    TLS_CERTIFICATE {
+        uuid id PK
+        uuid domain_id FK
+        varchar subject
+        varchar issuer
+        timestamptz not_after "alerts at 30/15/7 days"
+        varchar storage_ref
+    }
+    DOMAIN_API {
+        uuid domain_id PK, FK
+        uuid api_id PK, FK
+    }
+    DOMAIN_RESTRICTION {
+        uuid domain_id PK, FK
+        uuid partner_id PK, FK
+    }
+    API_ENDPOINT_DOC {
+        uuid id PK
+        uuid api_id FK
+        varchar source "SWAGGER | MANUAL"
+        varchar operation_name
+        varchar description
+    }
+    API_FIELD_DOC {
+        uuid id PK
+        uuid endpoint_id FK
+        varchar location "REQUEST_BODY | RESPONSE_BODY | REQUEST_HEADER | RESPONSE_HEADER"
+        varchar name
+        varchar data_type
+        boolean required
+        varchar example
+        varchar description
+    }
+    API_RETURN_CODE {
+        uuid id PK
+        uuid endpoint_id FK
+        int http_status
+        varchar meaning
+        varchar raised_by "GATEWAY | BACKEND"
+    }
+    PORTAL_PAGE {
+        uuid id PK
+        varchar slug UK
+        varchar title
+        varchar audience
+        varchar status "DRAFT | PUBLISHED"
+    }
+    PORTAL_PAGE_VERSION {
+        uuid id PK
+        uuid page_id FK
+        text body_markdown
+        varchar edited_by
+        timestamptz edited_at
+        boolean published
+    }
+</pre></div>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";mermaid.initialize({startOnLoad:true,theme:"neutral"});</script>
+</body></html>

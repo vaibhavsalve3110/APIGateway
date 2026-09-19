@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: apigw-platform
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/apigw}
+    username: ${DB_USER:apigw}
+    password: ${DB_PASSWORD:apigw}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    locations: classpath:db/migration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Tokens are issued to the browser by Keycloak on localhost; the backend fetches signing keys
+          # from wherever Keycloak is reachable (override KEYCLOAK_JWKS_URI when running in Docker).
+          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/apigw}
+          jwk-set-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8180/realms/apigw/protocol/openid-connect/certs}
+
+server:
+  port: ${SERVER_PORT:8088}
+  error:
+    include-message: always
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+apigw:
+  keys:
+    # BRD v1.3, CP-SEC-04: the previous key stays valid for 20 minutes after a new key is generated.
+    overlap-window: PT20M
+  apis:
+    # BRD CP-RPT-05: an API must stay Disabled for longer than this before it can be deleted.
+    delete-cooling-period: P7D
+  usage:
+    # BRD CP-RPT-03: usage data is retained online for 30 days.
+    retention: P30D
+    ingest-token: ${USAGE_INGEST_TOKEN:change-me-ingest-token}
+  security:
+    # Header-based sign-in for running without Keycloak. Never enable outside a developer machine.
+    dev-auth-enabled: false
+  scheduling:
+    enabled: true
+  gateway:
+    enabled: ${GATEWAY_SYNC_ENABLED:true}
+    redis-host: ${GATEWAY_REDIS_HOST:valkey}
+    redis-port: 6379
+    # Where the gateways send per-call usage logs (http-logger). Must be reachable from the gateway containers.
+    usage-sink-url: ${USAGE_SINK_URL:http://host.docker.internal:8088/internal/usage/batch}
+    sandbox:
+      admin-url: ${APISIX_SANDBOX_ADMIN_URL:http://localhost:9180}
+      admin-key: ${APISIX_SANDBOX_ADMIN_KEY:change-me-sandbox-admin-key}
+      hosts: [sandbox-api.apigw.localhost]
+    production:
+      admin-url: ${APISIX_PRODUCTION_ADMIN_URL:http://localhost:9181}
+      admin-key: ${APISIX_PRODUCTION_ADMIN_KEY:change-me-production-admin-key}
+      hosts: [api.apigw.localhost]

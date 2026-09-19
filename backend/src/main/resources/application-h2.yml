@@ -1,0 +1,13 @@
+# Run without Docker: in-memory database, no gateway sync, header-based developer sign-in, demo data.
+#   mvn spring-boot:run -Dspring-boot.run.profiles=h2,demo
+spring:
+  datasource:
+    url: jdbc:h2:mem:apigw;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+
+apigw:
+  security:
+    dev-auth-enabled: true
+  gateway:
+    enabled: false

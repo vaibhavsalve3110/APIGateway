@@ -1,0 +1,19 @@
+.shell { display: flex; height: 100%; }
+.shell-main { flex: 1; min-width: 0; overflow: auto; }
+
+.rail { width: 228px; background: var(--rail); display: flex; flex-direction: column; flex-shrink: 0; }
+.rail-brand { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 15px; border-bottom: 1px solid var(--rail-border); }
+.rail-title { color: #f2f5f9; font-size: 12.5px; font-weight: 600; }
+.rail-sub { color: #6d7686; font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; }
+.rail-scroll { flex: 1; overflow: auto; padding: 10px 8px; }
+.rail-section { font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: #59616f; padding: 0 11px; margin: 15px 0 5px; font-weight: 600; }
+.rail-item { display: flex; align-items: center; gap: 9px; padding: 6px 11px; border-radius: 5px; color: var(--rail-text); font-size: 12.5px; }
+.rail-item:hover { background: #1f2530; color: #e3e8ef; text-decoration: none; }
+.rail-item.active, .rail-item.active:hover { background: var(--accent); color: #fff; }
+.rail-planned { font-size: 9px; letter-spacing: 0.06em; text-transform: uppercase; color: #59616f; }
+.rail-item.active .rail-planned { color: #c9d6ee; }
+.rail-user { border-top: 1px solid var(--rail-border); padding: 11px 13px; display: flex; align-items: center; gap: 9px; }
+.rail-avatar { width: 28px; height: 28px; border-radius: 50%; background: #2c3542; color: #cbd4e1; display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 600; flex-shrink: 0; }
+.rail-user-name { color: #dfe5ee; font-size: 11.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail-signout { color: #6d7686; display: flex; }
+.rail-signout:hover { color: #e3e8ef; }

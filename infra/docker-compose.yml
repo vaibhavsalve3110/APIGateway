@@ -1,0 +1,131 @@
+# Local stack for the API Gateway platform.
+#
+#   docker compose up -d                 # infrastructure only; run the backend + portals on the host
+#   docker compose --profile app up -d   # also build and run the backend in a container
+#
+# Works with Docker Engine (Linux / WSL2), Rancher Desktop or Podman. Docker Desktop needs a paid
+# subscription in organisations above 250 staff or $10M revenue.
+#
+# Two APISIX deployments share one etcd under different prefixes: the Sandbox gateway only ever holds
+# sandbox Client IDs and keys, so a sandbox key cannot authenticate on Production (BRD GW-05).
+
+name: apigw
+
+x-apisix: &apisix
+  image: apache/apisix:3.18.0-debian
+  restart: unless-stopped
+  depends_on:
+    etcd:
+      condition: service_healthy
+  extra_hosts:
+    - "host.docker.internal:host-gateway"   # lets the gateways ship usage logs to a backend running on the host
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: apigw
+      POSTGRES_USER: apigw
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-apigw}
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apigw -d apigw"]
+      interval: 5s
+      retries: 20
+
+  valkey:
+    image: valkey/valkey:8.1-alpine
+    restart: unless-stopped
+    ports: ["6379:6379"]
+
+  etcd:
+    # Official image — the Bitnami etcd image used in most APISIX examples was withdrawn in 2025.
+    image: quay.io/coreos/etcd:v3.5.33
+    restart: unless-stopped
+    command:
+      - etcd
+      - --name=etcd
+      - --data-dir=/etcd-data
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://etcd:2379
+    volumes: ["etcddata:/etcd-data"]
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 5s
+      retries: 20
+
+  apisix-sandbox:
+    <<: *apisix
+    environment:
+      APISIX_ADMIN_KEY: ${APISIX_SANDBOX_ADMIN_KEY:-change-me-sandbox-admin-key}
+      APISIX_ETCD_PREFIX: /apisix-sandbox
+    volumes: ["./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro"]
+    ports:
+      - "9080:9080"   # partner traffic — sandbox-api.apigw.localhost
+      - "9180:9180"   # Admin API (backend only)
+
+  apisix-production:
+    <<: *apisix
+    environment:
+      APISIX_ADMIN_KEY: ${APISIX_PRODUCTION_ADMIN_KEY:-change-me-production-admin-key}
+      APISIX_ETCD_PREFIX: /apisix-production
+    volumes: ["./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro"]
+    ports:
+      - "9081:9080"   # partner traffic — api.apigw.localhost
+      - "9181:9180"   # Admin API (backend only)
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.4
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Tokens always carry this issuer, whether Keycloak is reached from the browser or from a container.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+    ports: ["8180:8080"]
+    volumes: ["./keycloak/realm-apigw.json:/opt/keycloak/data/import/realm-apigw.json:ro"]
+
+  # Stand-ins for the internal core-banking APIs the gateway fronts.
+  mock-sandbox:
+    image: wiremock/wiremock:3.13.2
+    restart: unless-stopped
+    command: ["--global-response-templating", "--disable-banner"]
+    volumes: ["./mocks/sandbox:/home/wiremock"]
+    ports: ["8091:8080"]
+
+  mock-production:
+    image: wiremock/wiremock:3.13.2
+    restart: unless-stopped
+    command: ["--global-response-templating", "--disable-banner"]
+    volumes: ["./mocks/production:/home/wiremock"]
+    ports: ["8092:8080"]
+
+  backend:
+    profiles: ["app"]
+    build: ../backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: demo
+      DB_URL: jdbc:postgresql://postgres:5432/apigw
+      DB_PASSWORD: ${DB_PASSWORD:-apigw}
+      KEYCLOAK_ISSUER: http://localhost:8180/realms/apigw
+      KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/apigw/protocol/openid-connect/certs
+      APISIX_SANDBOX_ADMIN_URL: http://apisix-sandbox:9180
+      APISIX_SANDBOX_ADMIN_KEY: ${APISIX_SANDBOX_ADMIN_KEY:-change-me-sandbox-admin-key}
+      APISIX_PRODUCTION_ADMIN_URL: http://apisix-production:9180
+      APISIX_PRODUCTION_ADMIN_KEY: ${APISIX_PRODUCTION_ADMIN_KEY:-change-me-production-admin-key}
+      GATEWAY_REDIS_HOST: valkey
+      USAGE_SINK_URL: http://backend:8088/internal/usage/batch
+      USAGE_INGEST_TOKEN: ${USAGE_INGEST_TOKEN:-change-me-ingest-token}
+    ports: ["8088:8088"]
+
+volumes:
+  pgdata:
+  etcddata:

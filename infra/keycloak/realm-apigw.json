@@ -1,0 +1,108 @@
+{
+  "realm": "apigw",
+  "displayName": "API Gateway",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 1800,
+  "roles": {
+    "realm": [
+      { "name": "ADMIN", "description": "Management Portal administrator — full control" },
+      { "name": "EDITOR", "description": "Management Portal editor — API definitions and documentation" },
+      { "name": "PARTNER", "description": "Developer Portal user, scoped to one partner account" }
+    ]
+  },
+  "groups": [
+    {
+      "name": "partners",
+      "subGroups": [
+        { "name": "PTN-00001", "attributes": { "partner": ["Acme Fintech Pvt Ltd"] } },
+        { "name": "PTN-00002", "attributes": { "partner": ["Kavery Payments"] } }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "management-portal",
+      "name": "API Gateway Management Portal",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:5173"],
+      "attributes": { "pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "http://localhost:5173/*" },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": { "full.path": "true", "claim.name": "groups", "access.token.claim": "true", "id.token.claim": "true", "userinfo.token.claim": "true" }
+        }
+      ]
+    },
+    {
+      "clientId": "developer-portal",
+      "name": "API Gateway Developer Portal",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:5174/*"],
+      "webOrigins": ["http://localhost:5174"],
+      "attributes": { "pkce.code.challenge.method": "S256", "post.logout.redirect.uris": "http://localhost:5174/*" },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": { "full.path": "true", "claim.name": "groups", "access.token.claim": "true", "id.token.claim": "true", "userinfo.token.claim": "true" }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "vaibhav.admin",
+      "email": "vaibhav.admin@apigw.local",
+      "firstName": "Vaibhav",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Admin@12345", "temporary": false }],
+      "realmRoles": ["ADMIN"]
+    },
+    {
+      "username": "ravi.editor",
+      "email": "ravi.editor@apigw.local",
+      "firstName": "Ravi",
+      "lastName": "Editor",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Editor@12345", "temporary": false }],
+      "realmRoles": ["EDITOR"]
+    },
+    {
+      "username": "acme.dev",
+      "email": "integrations@acmefintech.in",
+      "firstName": "Acme",
+      "lastName": "Integrations",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Partner@12345", "temporary": false }],
+      "realmRoles": ["PARTNER"],
+      "groups": ["/partners/PTN-00001"]
+    },
+    {
+      "username": "kavery.dev",
+      "email": "integrations@kaverypayments.in",
+      "firstName": "Kavery",
+      "lastName": "Integrations",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [{ "type": "password", "value": "Partner@12345", "temporary": false }],
+      "realmRoles": ["PARTNER"],
+      "groups": ["/partners/PTN-00002"]
+    }
+  ]
+}
