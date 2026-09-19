@@ -7,6 +7,84 @@ export type AccessTier = "UAT_ONLY" | "PRODUCTION";
 export type RecordStatus = "ACTIVE" | "DISABLED";
 export type KeyStatus = "ACTIVE" | "EXPIRING" | "EXPIRED" | "REVOKED";
 
+/** One documented parameter, header or body field; dotted names express nesting (payee.ifsc). */
+export interface ApiField {
+  name: string;
+  type: string;
+  required: boolean;
+  example: string | null;
+  description: string | null;
+}
+
+export interface ApiResponseDoc {
+  statusCode: number;
+  description: string | null;
+  bodyExample: string | null;
+  bodyFields: ApiField[];
+}
+
+export interface ApiDocumentation {
+  source: "MANUAL" | "OPENAPI" | "POSTMAN" | string;
+  queryParameters: ApiField[];
+  requestHeaders: ApiField[];
+  requestBodyFields: ApiField[];
+  requestBodyExample: string | null;
+  responseHeaders: ApiField[];
+  responses: ApiResponseDoc[];
+}
+
+export interface ImportedOperation {
+  name: string;
+  category: string;
+  httpMethod: string;
+  proxyPath: string;
+  description: string | null;
+  documentation: ApiDocumentation;
+}
+
+export interface ImportResult {
+  format: "OPENAPI" | "POSTMAN";
+  title: string | null;
+  suggestedBackendBaseUrl: string | null;
+  operations: ImportedOperation[];
+  warnings: string[];
+}
+
+/** Developer Portal view of one API — no internal backend URLs. */
+export interface PartnerApiDetail {
+  id: string;
+  name: string;
+  category: string;
+  httpMethod: string;
+  proxyPath: string;
+  description: string | null;
+  rateLimitCount: number;
+  rateLimitWindow: string;
+  productionAvailable: boolean;
+  sandboxBaseUrl: string;
+  keyHeader: string;
+  tryItSimulated: boolean;
+  documentation: ApiDocumentation;
+}
+
+export interface TryItRequest {
+  apiKey: string;
+  pathParams: Record<string, string>;
+  query: Record<string, string>;
+  headers: Record<string, string>;
+  body: string | null;
+}
+
+export interface TryItResponse {
+  status: number;
+  latencyMs: number;
+  headers: Record<string, string>;
+  body: string;
+  simulated: boolean;
+  requestUrl: string;
+  note: string | null;
+}
+
 export interface ApiView {
   id: string;
   name: string;
@@ -25,6 +103,7 @@ export interface ApiView {
   deletableFrom: string | null;
   createdAt: string;
   updatedAt: string;
+  documentation: ApiDocumentation;
 }
 
 export interface ApiRequest {
@@ -38,6 +117,9 @@ export interface ApiRequest {
   rateLimitWindow: RateWindow;
   ownerTeam: string | null;
   description: string | null;
+  documentation: ApiDocumentation;
+  /** Only read on create: DRAFT keeps an imported API off the gateways until it is enabled. */
+  status?: ApiStatus;
 }
 
 export interface GroupView {

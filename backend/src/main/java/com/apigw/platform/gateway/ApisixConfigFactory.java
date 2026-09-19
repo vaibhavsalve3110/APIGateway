@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.apigw.platform.apis.ApiDefinition;
 import com.apigw.platform.common.Env;
@@ -61,14 +63,14 @@ public final class ApisixConfigFactory {
         limit.put("rejected_code", 429);
         limit.put("show_limit_quota_header", true);
         plugins.put("limit-count", limit);
-        String backendPath = backend.getRawPath();
-        if (backendPath != null && !backendPath.isEmpty() && !"/".equals(backendPath)) {
-            plugins.put("proxy-rewrite", Map.of("uri", backendPath));
+        Map<String, Object> rewrite = rewrite(api.getProxyPath(), backend.getRawPath());
+        if (rewrite != null) {
+            plugins.put("proxy-rewrite", rewrite);
         }
 
         Map<String, Object> route = new LinkedHashMap<>();
         route.put("name", api.getName() + " (" + env.name().toLowerCase() + ")");
-        route.put("uri", api.getProxyPath());
+        route.put("uri", gatewayUri(api.getProxyPath()));
         route.put("methods", List.of(api.getHttpMethod()));
         if (target.hosts() != null && !target.hosts().isEmpty()) {
             route.put("hosts", target.hosts());
@@ -81,6 +83,38 @@ public final class ApisixConfigFactory {
         route.put("plugins", plugins);
         route.put("labels", Map.of("api_id", api.getId().toString(), "env", env.shortCode()));
         return route;
+    }
+
+    private static final Pattern PATH_PARAM = Pattern.compile("\\{([A-Za-z0-9_\\-.]+)}");
+
+    /** APISIX's router matches path parameters written as {@code :name}; proxy paths use OpenAPI's {@code {name}}. */
+    static String gatewayUri(String proxyPath) {
+        return PATH_PARAM.matcher(proxyPath).replaceAll(m -> ":" + m.group(1).replace('-', '_').replace('.', '_'));
+    }
+
+    /**
+     * How the partner-facing path maps onto the backend path:
+     * a static backend path is used as-is; a backend path with {@code {params}} is filled from the matching
+     * parameters of the proxy path with a regex rewrite; an empty backend path forwards the request path unchanged.
+     */
+    static Map<String, Object> rewrite(String proxyPath, String backendPath) {
+        if (backendPath == null || backendPath.isEmpty() || "/".equals(backendPath)) {
+            return null;
+        }
+        List<String> proxyParams = new java.util.ArrayList<>();
+        Matcher m = PATH_PARAM.matcher(proxyPath);
+        while (m.find()) {
+            proxyParams.add(m.group(1));
+        }
+        if (proxyParams.isEmpty() || !PATH_PARAM.matcher(backendPath).find()) {
+            return Map.of("uri", backendPath);
+        }
+        String regex = "^" + PATH_PARAM.matcher(proxyPath.replace(".", "\\.")).replaceAll("([^/]+)") + "$";
+        String template = PATH_PARAM.matcher(backendPath).replaceAll(p -> {
+            int index = proxyParams.indexOf(p.group(1));
+            return index < 0 ? Matcher.quoteReplacement(p.group(0)) : "\\$" + (index + 1);
+        });
+        return Map.of("regex_uri", List.of(regex, template));
     }
 
     public static Map<String, Object> consumer(String clientId, String partnerCode, String partnerName) {

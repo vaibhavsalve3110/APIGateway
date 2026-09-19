@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { AuthProvider, ComingSoon, readAuthConfig, SignInScreen, type DevIdentity } from "@apigw/ui";
 
 import { Shell } from "./Shell";
+import { ApiEditorPage } from "./pages/ApiEditorPage";
 import { ApisPage } from "./pages/ApisPage";
 import { AuditPage } from "./pages/AuditPage";
 import { PartnerDetailPage } from "./pages/PartnerDetailPage";
@@ -26,6 +27,8 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/apis" replace /> },
       { path: "apis", element: <ApisPage /> },
+      { path: "apis/new", element: <ApiEditorPage /> },
+      { path: "apis/:id", element: <ApiEditorPage /> },
       { path: "partners", element: <PartnersPage /> },
       { path: "partners/:id", element: <PartnerDetailPage /> },
       { path: "usage", element: <UsagePage /> },
@@ -40,11 +43,8 @@ const router = createBrowserRouter([
         element: <ComingSoon title="Products & portal content" brdRefs="CP-API-09, CP-API-10"
           description="Bundle APIs into Products, and edit and publish Developer Portal pages." />,
       },
-      {
-        path: "documentation",
-        element: <ComingSoon title="API documentation builder" brdRefs="CP-API-06, CP-API-07"
-          description="Swagger / OpenAPI import and the manual request, response, header and return-code builder." />,
-      },
+      // CP-API-06/07 now live on each API's page (Request / Responses tabs and Import).
+      { path: "documentation", element: <Navigate to="/apis" replace /> },
       {
         path: "mapping",
         element: <ComingSoon title="Access mapping" brdRefs="CP-PTN-03, CP-RPT-06"

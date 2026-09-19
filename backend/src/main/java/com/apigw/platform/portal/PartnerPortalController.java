@@ -15,10 +15,21 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.Valid;
+
+import org.springframework.web.bind.annotation.RequestBody;
+
+import com.apigw.platform.apis.ApiDefinition;
 import com.apigw.platform.apis.ApiStatus;
 import com.apigw.platform.apis.ApiView;
 import com.apigw.platform.apis.ApiService;
+import com.apigw.platform.apis.docs.ApiDocumentation;
+import com.apigw.platform.common.ApiException;
 import com.apigw.platform.common.Env;
+import com.apigw.platform.config.ApigwProperties;
+import com.apigw.platform.gateway.ApisixConfigFactory;
+import com.apigw.platform.portal.TryItService.TryItRequest;
+import com.apigw.platform.portal.TryItService.TryItResponse;
 import com.apigw.platform.keys.KeyViews.GeneratedKey;
 import com.apigw.platform.keys.KeyViews.KeyView;
 import com.apigw.platform.keys.SecurityKeyService;
@@ -42,12 +53,17 @@ class PartnerPortalController {
     private final SecurityKeyService keys;
     private final ApiService apis;
     private final UsageService usage;
+    private final TryItService tryIt;
+    private final ApigwProperties props;
 
-    PartnerPortalController(PartnerService partners, SecurityKeyService keys, ApiService apis, UsageService usage) {
+    PartnerPortalController(PartnerService partners, SecurityKeyService keys, ApiService apis, UsageService usage,
+                            TryItService tryIt, ApigwProperties props) {
         this.partners = partners;
         this.keys = keys;
         this.apis = apis;
         this.usage = usage;
+        this.tryIt = tryIt;
+        this.props = props;
     }
 
     record Me(String code, String name, AccessTier accessTier, RecordStatus status, String clientIdSandbox,
@@ -81,6 +97,38 @@ class PartnerPortalController {
             }
         }
         return result;
+    }
+
+    record ApiDetail(UUID id, String name, String category, String httpMethod, String proxyPath, String description,
+                     int rateLimitCount, String rateLimitWindow, boolean productionAvailable, String sandboxBaseUrl,
+                     String keyHeader, boolean tryItSimulated, ApiDocumentation documentation) {
+    }
+
+    /** DP-02: the full documentation of one API in the partner's catalogue. */
+    @GetMapping("/apis/{id}")
+    ApiDetail api(@PathVariable UUID id) {
+        Partner p = current();
+        ApiDefinition api = visibleApi(id);
+        return new ApiDetail(api.getId(), api.getName(), api.getCategory(), api.getHttpMethod(), api.getProxyPath(),
+                api.getDescription(), api.getRateLimitCount(), api.getRateLimitWindow().name(),
+                p.getAccessTier() == AccessTier.PRODUCTION && api.getBackendUrlProduction() != null,
+                props.tryIt().publicSandboxUrl(), ApisixConfigFactory.KEY_HEADER, props.tryIt().simulate(),
+                apis.documentationOf(api));
+    }
+
+    /** DP-03: a live test call against the Sandbox, with the partner's own Sandbox key. */
+    @PostMapping("/apis/{id}/try")
+    TryItResponse tryIt(@PathVariable UUID id, @Valid @RequestBody TryItRequest request) {
+        return tryIt.call(current(), visibleApi(id), request);
+    }
+
+    /** Same visibility rule as the catalogue: active APIs only (mapping will narrow this further). */
+    private ApiDefinition visibleApi(UUID id) {
+        ApiDefinition api = apis.requireDefinition(id);
+        if (api.getStatus() != ApiStatus.ACTIVE) {
+            throw ApiException.notFound("API", id);
+        }
+        return api;
     }
 
     @GetMapping("/keys")

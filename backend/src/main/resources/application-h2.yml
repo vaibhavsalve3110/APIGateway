@@ -11,3 +11,5 @@ apigw:
     dev-auth-enabled: true
   gateway:
     enabled: false
+  try-it:
+    mode: SIMULATE

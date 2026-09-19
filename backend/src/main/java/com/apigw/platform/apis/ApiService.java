@@ -9,6 +9,8 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.apigw.platform.apis.docs.ApiDocumentation;
+import com.apigw.platform.apis.docs.DocumentationCodec;
 import com.apigw.platform.audit.AuditService;
 import com.apigw.platform.common.ApiException;
 import com.apigw.platform.config.ApigwProperties;
@@ -26,14 +28,26 @@ public class ApiService {
     private final AuditService audit;
     private final Clock clock;
     private final Duration coolingPeriod;
+    private final DocumentationCodec docs;
 
     public ApiService(ApiRepository repository, GatewayClient gateway, AuditService audit, Clock clock,
-                      ApigwProperties props) {
+                      ApigwProperties props, DocumentationCodec docs) {
         this.repository = repository;
         this.gateway = gateway;
         this.audit = audit;
         this.clock = clock;
         this.coolingPeriod = props.apis().deleteCoolingPeriod();
+        this.docs = docs;
+    }
+
+    /** For the Developer Portal: the documentation of an API, without re-serialising the whole view. */
+    @Transactional(readOnly = true)
+    public ApiDefinition requireDefinition(UUID id) {
+        return require(id);
+    }
+
+    public ApiDocumentation documentationOf(ApiDefinition api) {
+        return docs.read(api.getDocumentation());
     }
 
     @Transactional(readOnly = true)
@@ -51,10 +65,15 @@ public class ApiService {
         Instant now = clock.instant();
         ApiDefinition api = new ApiDefinition(UUID.randomUUID(), now);
         apply(api, request, now);
+        if (request.status() == ApiStatus.DRAFT) {
+            api.markDraft(now);
+        }
         repository.saveAndFlush(api);
         gateway.syncApi(api);
         audit.record(actor, "CREATE", AUDIT_TYPE, api.getId(),
-                api.getName() + " onboarded at " + api.getHttpMethod() + " " + api.getProxyPath());
+                api.getName() + " onboarded at " + api.getHttpMethod() + " " + api.getProxyPath()
+                        + (api.getStatus() == ApiStatus.DRAFT ? " as a draft" : "")
+                        + (request.documentation() != null ? " — documentation from " + request.documentation().source() : ""));
         return view(api);
     }
 
@@ -107,6 +126,9 @@ public class ApiService {
         api.update(r.name().trim(), r.category().trim(), r.httpMethod(), r.proxyPath().trim(), r.backendUrlSandbox().trim(),
                 blankToNull(r.backendUrlProduction()), r.rateLimitCount(), r.rateLimitWindow(),
                 blankToNull(r.ownerTeam()), blankToNull(r.description()), now);
+        if (r.documentation() != null) {
+            api.setDocumentation(docs.write(r.documentation()), now);
+        }
     }
 
     private ApiDefinition require(UUID id) {
@@ -114,7 +136,7 @@ public class ApiService {
     }
 
     private ApiView view(ApiDefinition api) {
-        return ApiView.of(api, coolingPeriod);
+        return ApiView.of(api, coolingPeriod, docs.read(api.getDocumentation()));
     }
 
     private static String blankToNull(String s) {

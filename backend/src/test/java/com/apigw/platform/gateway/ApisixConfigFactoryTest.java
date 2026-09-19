@@ -50,6 +50,16 @@ class ApisixConfigFactoryTest {
     }
 
     @Test
+    void pathParametersBecomeRouterParamsAndReachTheBackend() {
+        assertThat(ApisixConfigFactory.gatewayUri("/v1/payments/imps/{txnId}")).isEqualTo("/v1/payments/imps/:txnId");
+        assertThat(ApisixConfigFactory.rewrite("/v1/accounts/{accountId}/txns/{txnId}", "/core/{accountId}/t/{txnId}"))
+                .isEqualTo(Map.of("regex_uri", List.of("^/v1/accounts/([^/]+)/txns/([^/]+)$", "/core/$1/t/$2")));
+        // Static backend path: rewrite to it; no backend path: forward the request path unchanged.
+        assertThat(ApisixConfigFactory.rewrite("/v1/x/{id}", "/core/x")).isEqualTo(Map.of("uri", "/core/x"));
+        assertThat(ApisixConfigFactory.rewrite("/v1/x/{id}", "")).isNull();
+    }
+
+    @Test
     void routeIdsEncodeApiAndEnvironment() {
         UUID id = UUID.fromString("0f2c7d1b-64a8-4350-8c91-d472bf0ae618");
         assertThat(ApisixConfigFactory.routeId(id, Env.PRODUCTION)).isEqualTo("api-0f2c7d1b-64a8-4350-8c91-d472bf0ae618-prd");
@@ -66,7 +76,8 @@ class ApisixConfigFactoryTest {
     void usageLoggerShipsMetadataWithTheIngestToken() {
         ApigwProperties props = new ApigwProperties(new ApigwProperties.Keys(Duration.ofMinutes(20)),
                 new ApigwProperties.Apis(Duration.ofDays(7)), new ApigwProperties.Usage(Duration.ofDays(30), "t0k"),
-                new ApigwProperties.Security(false), gw);
+                new ApigwProperties.Security(false), gw,
+                new ApigwProperties.TryIt("SIMULATE", "http://sbx:9080", "http://sandbox-api:9080", Duration.ofSeconds(5)));
         Map<String, Object> logger = (Map<String, Object>) ((Map<String, Object>) ApisixConfigFactory
                 .usageLogger(Env.SANDBOX, props).get("plugins")).get("http-logger");
         assertThat(logger).containsEntry("uri", "http://sink").containsEntry("auth_header", "Ingest t0k");

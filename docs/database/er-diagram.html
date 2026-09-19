@@ -5,7 +5,7 @@ h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:32px 0 8px}p{color:#5b
 .card{background:#fff;border:1px solid #dfe3e8;border-radius:8px;padding:16px;overflow-x:auto}</style></head><body>
 <h1>API Gateway platform — database ER diagram</h1>
 <p>Generated from docs/database/er-diagram.md. Open in a browser with internet access (Mermaid loads from a CDN).</p>
-<h2>Implemented — migration V1</h2><div class="card"><pre class="mermaid">erDiagram
+<h2>Implemented — migrations V1, V2</h2><div class="card"><pre class="mermaid">erDiagram
     PARTNER_GROUP ||--o{ PARTNER : "contains"
     PARTNER ||--o{ SECURITY_KEY : "holds"
     API_DEFINITION ||--o{ USAGE_EVENT : "logical: api_id"
@@ -60,6 +60,7 @@ h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:32px 0 8px}p{color:#5b
         varchar rate_limit_window "MINUTE | HOUR | DAY"
         varchar owner_team
         varchar description
+        varchar documentation "V2 - JSON contract"
         timestamptz disabled_at "starts the 7-day cooling period"
         timestamptz created_at
         timestamptz updated_at
@@ -99,9 +100,6 @@ h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:32px 0 8px}p{color:#5b
     DOMAIN ||--o{ DOMAIN_RESTRICTION : "limits"
     PARTNER ||--o{ DOMAIN_RESTRICTION : "limited to"
     DOMAIN ||--o| TLS_CERTIFICATE : "serves"
-    API_DEFINITION ||--o{ API_ENDPOINT_DOC : "documents"
-    API_ENDPOINT_DOC ||--o{ API_FIELD_DOC : "has fields"
-    API_ENDPOINT_DOC ||--o{ API_RETURN_CODE : "returns"
     PORTAL_PAGE ||--o{ PORTAL_PAGE_VERSION : "versions"
 
     PRODUCT {
@@ -161,30 +159,6 @@ h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:32px 0 8px}p{color:#5b
     DOMAIN_RESTRICTION {
         uuid domain_id PK, FK
         uuid partner_id PK, FK
-    }
-    API_ENDPOINT_DOC {
-        uuid id PK
-        uuid api_id FK
-        varchar source "SWAGGER | MANUAL"
-        varchar operation_name
-        varchar description
-    }
-    API_FIELD_DOC {
-        uuid id PK
-        uuid endpoint_id FK
-        varchar location "REQUEST_BODY | RESPONSE_BODY | REQUEST_HEADER | RESPONSE_HEADER"
-        varchar name
-        varchar data_type
-        boolean required
-        varchar example
-        varchar description
-    }
-    API_RETURN_CODE {
-        uuid id PK
-        uuid endpoint_id FK
-        int http_status
-        varchar meaning
-        varchar raised_by "GATEWAY | BACKEND"
     }
     PORTAL_PAGE {
         uuid id PK

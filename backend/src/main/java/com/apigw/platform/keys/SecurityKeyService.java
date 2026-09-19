@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +60,28 @@ public class SecurityKeyService {
         this.audit = audit;
         this.clock = clock;
         this.overlap = props.keys().overlapWindow();
+    }
+
+    /**
+     * Checks a key a partner pasted into the Developer Portal's "Try it" panel. It must be theirs, live, and a
+     * Sandbox key — Production is never callable from the portal (DP-03).
+     */
+    @Transactional(readOnly = true)
+    public void assertUsableSandboxKey(UUID partnerId, String plaintext) {
+        SecurityKey key = plaintext == null ? null
+                : keys.findByKeyHash(KeyMaterial.sha256Hex(plaintext.trim())).orElse(null);
+        if (key == null || !key.getPartnerId().equals(partnerId)) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "INVALID_KEY",
+                    "This key is not valid for your account. Paste the Sandbox key you stored when you created it.");
+        }
+        if (key.getEnvironment() != Env.SANDBOX) {
+            throw ApiException.forbidden("SANDBOX_ONLY",
+                    "Production keys cannot be used from the portal — use a Sandbox key. Test calls only reach the Sandbox.");
+        }
+        if (!key.getStatus().isLive()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "KEY_NOT_ACTIVE",
+                    "This key is " + key.getStatus().name().toLowerCase() + ". Use your current Sandbox key.");
+        }
     }
 
     @Transactional(readOnly = true)

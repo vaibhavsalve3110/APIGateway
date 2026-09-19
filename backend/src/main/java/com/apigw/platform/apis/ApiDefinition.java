@@ -63,6 +63,10 @@ public class ApiDefinition {
     @Column(name = "disabled_at")
     private Instant disabledAt;
 
+    /** JSON document; see ApiDocumentation. */
+    @Column(length = 200_000)
+    private String documentation;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -93,6 +97,17 @@ public class ApiDefinition {
         this.rateLimitWindow = rateLimitWindow;
         this.ownerTeam = ownerTeam;
         this.description = description;
+        this.updatedAt = now;
+    }
+
+    public void setDocumentation(String documentation, Instant now) {
+        this.documentation = documentation;
+        this.updatedAt = now;
+    }
+
+    /** Created from an import but not yet reviewed: kept off the gateways until enabled. */
+    public void markDraft(Instant now) {
+        this.status = ApiStatus.DRAFT;
         this.updatedAt = now;
     }
 
@@ -151,6 +166,7 @@ public class ApiDefinition {
     public String getOwnerTeam() { return ownerTeam; }
     public String getDescription() { return description; }
     public Instant getDisabledAt() { return disabledAt; }
+    public String getDocumentation() { return documentation; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

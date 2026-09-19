@@ -25,7 +25,6 @@ const sections: { title: string; items: NavItem[] }[] = [
     title: "API Management",
     items: [
       { to: "/apis", label: "APIs", icon: icon("M12 3 3 7.5 12 12l9-4.5L12 3ZM3 12l9 4.5 9-4.5M3 16.5l9 4.5 9-4.5") },
-      { to: "/documentation", label: "Documentation", icon: icon("M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5ZM14 3v5h5"), planned: true },
       { to: "/products", label: "Products", icon: icon("M21 8v8l-9 5-9-5V8l9-5 9 5ZM3 8l9 5 9-5"), planned: true, adminOnly: true },
     ],
   },

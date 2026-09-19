@@ -4,11 +4,12 @@ PostgreSQL schema for the control plane (the Management Portal and Developer Por
 The gateways keep their own runtime configuration in etcd; this database is the system of record
 that the backend pushes to them.
 
-- **Implemented** tables come from `backend/src/main/resources/db/migration/V1__baseline.sql`.
-- **Planned** tables cover the BRD modules not yet built (Products, access mapping, domains, documentation).
+- **Implemented** tables come from `backend/src/main/resources/db/migration/V1__baseline.sql` and
+  `V2__api_documentation.sql`.
+- **Planned** tables cover the BRD modules not yet built (Products, access mapping, domains, portal pages).
   Column lists for planned tables are a design proposal, to be confirmed when each module is built.
 
-## Implemented (migration V1)
+## Implemented (migrations V1, V2)
 
 ```mermaid
 erDiagram
@@ -66,6 +67,7 @@ erDiagram
         varchar rate_limit_window "MINUTE | HOUR | DAY"
         varchar owner_team
         varchar description
+        varchar documentation "V2 - JSON contract, see below"
         timestamptz disabled_at "starts the 7-day cooling period"
         timestamptz created_at
         timestamptz updated_at
@@ -96,6 +98,32 @@ erDiagram
 `USAGE_EVENT` and `AUDIT_EVENT` are append-only and deliberately carry no foreign keys: usage rows must
 survive an API being deleted, and audit rows must survive anything.
 
+### API documentation (CP-API-06, CP-API-07)
+
+Each API's contract is stored as one JSON document in `api_definition.documentation` (up to 200,000 characters),
+not as child tables. The contract is always read and written whole: by the editor in the Management Portal,
+by the Swagger / OpenAPI / Postman importer, and by the Developer Portal's API page and *Try it live* console.
+One column means one row version per edit and no joins on the partner-facing read path.
+
+```json
+{
+  "source": "MANUAL | OPENAPI | POSTMAN",
+  "queryParameters":   [{ "name": "accountNumber", "type": "string", "required": true, "example": "...", "description": "..." }],
+  "requestHeaders":    [ "...same field shape..." ],
+  "requestBodyFields": [ "...same field shape; dotted names for nesting, e.g. payee.ifsc..." ],
+  "requestBodyExample": "{ ... }",
+  "responseHeaders":   [ "...same field shape..." ],
+  "responses": [
+    { "statusCode": 200, "description": "Accepted", "bodyExample": "{ ... }", "bodyFields": [] },
+    { "statusCode": 409, "description": "Duplicate X-Request-Id", "bodyExample": "{ ... }", "bodyFields": [] }
+  ]
+}
+```
+
+The backend validates it on every save: every row needs a name, and status codes must be 100-599 and unique per API.
+If documentation later needs search across APIs or per-field history, split it into endpoint / field / return-code
+tables. On PostgreSQL the column can also become `jsonb` with a GIN index without changing the application.
+
 ## Planned (remaining BRD modules)
 
 ```mermaid
@@ -112,9 +140,6 @@ erDiagram
     DOMAIN ||--o{ DOMAIN_RESTRICTION : "limits"
     PARTNER ||--o{ DOMAIN_RESTRICTION : "limited to"
     DOMAIN ||--o| TLS_CERTIFICATE : "serves"
-    API_DEFINITION ||--o{ API_ENDPOINT_DOC : "documents"
-    API_ENDPOINT_DOC ||--o{ API_FIELD_DOC : "has fields"
-    API_ENDPOINT_DOC ||--o{ API_RETURN_CODE : "returns"
     PORTAL_PAGE ||--o{ PORTAL_PAGE_VERSION : "versions"
 
     PRODUCT {
@@ -174,30 +199,6 @@ erDiagram
     DOMAIN_RESTRICTION {
         uuid domain_id PK, FK
         uuid partner_id PK, FK
-    }
-    API_ENDPOINT_DOC {
-        uuid id PK
-        uuid api_id FK
-        varchar source "SWAGGER | MANUAL"
-        varchar operation_name
-        varchar description
-    }
-    API_FIELD_DOC {
-        uuid id PK
-        uuid endpoint_id FK
-        varchar location "REQUEST_BODY | RESPONSE_BODY | REQUEST_HEADER | RESPONSE_HEADER"
-        varchar name
-        varchar data_type
-        boolean required
-        varchar example
-        varchar description
-    }
-    API_RETURN_CODE {
-        uuid id PK
-        uuid endpoint_id FK
-        int http_status
-        varchar meaning
-        varchar raised_by "GATEWAY | BACKEND"
     }
     PORTAL_PAGE {
         uuid id PK

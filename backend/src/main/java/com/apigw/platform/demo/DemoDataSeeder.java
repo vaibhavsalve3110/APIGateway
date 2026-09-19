@@ -112,7 +112,8 @@ class DemoDataSeeder implements ApplicationRunner {
     private ApiView api(String name, String category, String method, String path, String backendPath, int limit,
                         String description) {
         return apis.create(new ApiRequest(name, category, method, path, MOCK_SANDBOX + backendPath,
-                MOCK_PRODUCTION + backendPath, limit, RateWindow.MINUTE, "Integrations", description), SEED);
+                MOCK_PRODUCTION + backendPath, limit, RateWindow.MINUTE, "Integrations", description,
+                DemoDocumentation.forPath(path), null), SEED);
     }
 
     /** Deterministic synthetic traffic so the usage report has something to show on first run. */

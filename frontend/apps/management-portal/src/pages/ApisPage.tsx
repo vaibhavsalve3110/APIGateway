@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  ApiError, Chip, ErrorBanner, Field, formatDateTime, Modal, PageHeader, StatusChip, Switch, useAuth,
-  type ApiRequest, type ApiStatus, type ApiView,
+  Chip, ErrorBanner, formatDateTime, Modal, PageHeader, StatusChip, Switch, useAuth,
+  type ApiStatus, type ApiView,
 } from "@apigw/ui";
 
 type Tab = "ALL" | ApiStatus;
@@ -17,7 +18,8 @@ export function ApisPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("ALL");
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState<ApiView | "new" | null>(null);
+  const navigate = useNavigate();
+  const notice = (useLocation().state as { notice?: string } | null)?.notice;
   const [deleting, setDeleting] = useState<ApiView | null>(null);
 
   const apis = useQuery({ queryKey: ["apis"], queryFn: () => api.get<ApiView[]>("/api/admin/apis") });
@@ -49,8 +51,9 @@ export function ApisPage() {
       <PageHeader
         title="APIs"
         subtitle={`${counts.ALL} APIs onboarded · ${counts.ACTIVE} active · ${all.filter((a) => a.guestVisible).length} visible to guest users`}
-        actions={isAdmin ? <button className="btn btn-primary" onClick={() => setEditing("new")}>+ Add API</button> : null}
+        actions={isAdmin ? <button className="btn btn-primary" onClick={() => navigate("/apis/new")}>+ Add API</button> : null}
       />
+      {notice ? <div className="banner banner-ok">{notice}</div> : null}
       <ErrorBanner error={apis.error ?? toggleGuest.error ?? setStatus.error} />
 
       <div className="card">
@@ -75,7 +78,7 @@ export function ApisPage() {
             <tbody>
               {rows.map((a) => (
                 <tr key={a.id}>
-                  <td><div className="cell-title">{a.name}</div><div className="cell-sub">{a.proxyPath}</div></td>
+                  <td><Link to={`/apis/${a.id}`} className="cell-title link">{a.name}</Link><div className="cell-sub">{a.proxyPath}</div></td>
                   <td>{a.category}</td>
                   <td><Chip tone={METHOD_TONE[a.httpMethod] ?? "info"}><span className="mono">{a.httpMethod}</span></Chip></td>
                   <td>
@@ -93,7 +96,7 @@ export function ApisPage() {
                   {isAdmin ? (
                     <td>
                       <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                        <button className="btn btn-sm" onClick={() => setEditing(a)}>Edit</button>
+                        <button className="btn btn-sm" onClick={() => navigate(`/apis/${a.id}`)}>Edit</button>
                         <button className="btn btn-sm" disabled={setStatus.isPending} onClick={() => setStatus.mutate(a)}>
                           {a.status === "DISABLED" ? "Enable" : "Disable"}
                         </button>
@@ -108,89 +111,8 @@ export function ApisPage() {
         )}
       </div>
 
-      {editing ? <ApiFormModal existing={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={refresh} /> : null}
       {deleting ? <DeleteApiModal target={deleting} onClose={() => setDeleting(null)} onDeleted={refresh} /> : null}
     </div>
-  );
-}
-
-function ApiFormModal({ existing, onClose, onSaved }: { existing: ApiView | null; onClose: () => void; onSaved: () => void }) {
-  const { api } = useAuth();
-  const [form, setForm] = useState<ApiRequest>(() => ({
-    name: existing?.name ?? "",
-    category: existing?.category ?? "Payments",
-    httpMethod: existing?.httpMethod ?? "GET",
-    proxyPath: existing?.proxyPath ?? "/v1/",
-    backendUrlSandbox: existing?.backendUrlSandbox ?? "http://mock-sandbox:8080/",
-    backendUrlProduction: existing?.backendUrlProduction ?? "",
-    rateLimitCount: existing?.rateLimitCount ?? 300,
-    rateLimitWindow: existing?.rateLimitWindow ?? "MINUTE",
-    ownerTeam: existing?.ownerTeam ?? "",
-    description: existing?.description ?? "",
-  }));
-  const save = useMutation({
-    mutationFn: () => existing
-      ? api.put<ApiView>(`/api/admin/apis/${existing.id}`, form)
-      : api.post<ApiView>("/api/admin/apis", form),
-    onSuccess: () => { onSaved(); onClose(); },
-  });
-  const fieldError = (name: string) => (save.error instanceof ApiError ? save.error.fields[name] : undefined);
-  const set = <K extends keyof ApiRequest>(key: K, value: ApiRequest[K]) => setForm((f) => ({ ...f, [key]: value }));
-
-  return (
-    <Modal
-      title={existing ? `Edit ${existing.name}` : "Add API"}
-      width={640}
-      onClose={onClose}
-      footer={<>
-        <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn btn-primary" disabled={save.isPending} onClick={() => save.mutate()}>
-          {save.isPending ? "Saving…" : existing ? "Save changes" : "Add API"}
-        </button>
-      </>}
-    >
-      {save.error && !(save.error instanceof ApiError && save.error.code === "VALIDATION_FAILED") ? <ErrorBanner error={save.error} /> : null}
-      <div className="form-grid">
-        <Field label="API name" error={fieldError("name")} className="span-2">
-          <input className="input" value={form.name} onChange={(e) => set("name", e.target.value)} />
-        </Field>
-        <Field label="Category" error={fieldError("category")}>
-          <input className="input" value={form.category} onChange={(e) => set("category", e.target.value)} />
-        </Field>
-        <Field label="Method" error={fieldError("httpMethod")}>
-          <select className="select" value={form.httpMethod} onChange={(e) => set("httpMethod", e.target.value)}>
-            {["GET", "POST", "PUT", "PATCH", "DELETE"].map((m) => <option key={m}>{m}</option>)}
-          </select>
-        </Field>
-        <Field label="Proxy path (partner-facing)" error={fieldError("proxyPath")} className="span-2">
-          <input className="input mono" value={form.proxyPath} onChange={(e) => set("proxyPath", e.target.value)} />
-        </Field>
-        <Field label="Backend URL — Sandbox (UAT)" error={fieldError("backendUrlSandbox")} className="span-2">
-          <input className="input mono" value={form.backendUrlSandbox} onChange={(e) => set("backendUrlSandbox", e.target.value)} />
-        </Field>
-        <Field label="Backend URL — Production (optional)" error={fieldError("backendUrlProduction")} className="span-2">
-          <input className="input mono" value={form.backendUrlProduction ?? ""} onChange={(e) => set("backendUrlProduction", e.target.value)} />
-        </Field>
-        <Field label="Rate limit — requests" error={fieldError("rateLimitCount")}>
-          <input className="input mono" type="number" min={1} value={form.rateLimitCount}
-            onChange={(e) => set("rateLimitCount", Number(e.target.value))} />
-        </Field>
-        <Field label="Per" error={fieldError("rateLimitWindow")}>
-          <select className="select" value={form.rateLimitWindow} onChange={(e) => set("rateLimitWindow", e.target.value as ApiRequest["rateLimitWindow"])}>
-            <option value="MINUTE">Minute</option><option value="HOUR">Hour</option><option value="DAY">Day</option>
-          </select>
-        </Field>
-        <Field label="Owning team" className="span-2">
-          <input className="input" value={form.ownerTeam ?? ""} onChange={(e) => set("ownerTeam", e.target.value)} />
-        </Field>
-        <Field label="Description shown to partners" className="span-2">
-          <textarea className="textarea" rows={3} value={form.description ?? ""} onChange={(e) => set("description", e.target.value)} />
-        </Field>
-      </div>
-      <p className="muted" style={{ fontSize: 12 }}>
-        The limit is counted per partner Client ID at the gateway. New APIs are hidden from guest users until you switch them on.
-      </p>
-    </Modal>
   );
 }
 

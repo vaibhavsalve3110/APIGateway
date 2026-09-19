@@ -51,6 +51,12 @@ apigw:
     dev-auth-enabled: false
   scheduling:
     enabled: true
+  try-it:
+    # GATEWAY = call the Sandbox gateway; SIMULATE = answer from the documented example (no gateway needed)
+    mode: ${TRY_IT_MODE:GATEWAY}
+    sandbox-url: ${TRY_IT_SANDBOX_URL:http://localhost:9080}
+    public-sandbox-url: ${PUBLIC_SANDBOX_URL:http://sandbox-api.apigw.localhost:9080}
+    timeout: PT10S
   gateway:
     enabled: ${GATEWAY_SYNC_ENABLED:true}
     redis-host: ${GATEWAY_REDIS_HOST:valkey}

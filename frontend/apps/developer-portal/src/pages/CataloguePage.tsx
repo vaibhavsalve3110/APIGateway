@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router";
 
 import { Chip, ErrorBanner, useAuth } from "@apigw/ui";
 
@@ -54,12 +55,12 @@ export function CataloguePage() {
           <h2>{category}</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14 }}>
             {rows.filter((a) => a.category === category).map((a) => (
-              <div key={a.id} className="card" style={{ padding: "15px 17px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <Link key={a.id} to={`/apis/${a.id}`} className="card api-card" style={{ padding: "15px 17px", display: "flex", flexDirection: "column", gap: 8 }}>
                 <div className="row" style={{ gap: 8 }}>
                   <Chip tone={a.httpMethod === "GET" ? "info" : "ok"}><span className="mono">{a.httpMethod}</span></Chip>
                   <span className="mono muted" style={{ fontSize: 11, overflow: "hidden", textOverflow: "ellipsis" }}>{a.proxyPath}</span>
                 </div>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{a.name}</div>
+                <div className="api-card-name" style={{ fontSize: 13.5, fontWeight: 600 }}>{a.name}</div>
                 <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.55, flex: 1 }}>{a.description ?? "Documentation coming soon."}</p>
                 <div className="row" style={{ gap: 8, paddingTop: 10, borderTop: "1px solid var(--border-row)" }}>
                   <Chip tone="info">SANDBOX</Chip>
@@ -67,7 +68,7 @@ export function CataloguePage() {
                   <span className="grow" />
                   <span className="muted" style={{ fontSize: 11.5 }}>{a.rateLimitCount.toLocaleString("en-IN")} / {a.rateLimitWindow.toLowerCase()}</span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </section>

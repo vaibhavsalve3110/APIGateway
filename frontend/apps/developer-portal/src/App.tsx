@@ -4,6 +4,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { AuthProvider, ComingSoon, readAuthConfig, SignInScreen, type DevIdentity } from "@apigw/ui";
 
 import { Layout } from "./Layout";
+import { ApiDetailPage } from "./pages/ApiDetailPage";
 import { CataloguePage } from "./pages/CataloguePage";
 import { KeysPage } from "./pages/KeysPage";
 
@@ -28,11 +29,12 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/apis" replace /> },
       { path: "apis", element: <CataloguePage /> },
+      { path: "apis/:id", element: <ApiDetailPage /> },
       { path: "keys", element: <KeysPage /> },
       {
         path: "sandbox",
         element: <ComingSoon title="Sandbox console" brdRefs="DP-03"
-          description="Run live test calls against the UAT gateway with your own key. Production is never callable from the portal." />,
+          description="Open any API from your catalogue and use its Try it live panel to call the Sandbox with your own key. A standalone console with saved requests follows." />,
       },
       {
         path: "guides",

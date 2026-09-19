@@ -26,7 +26,14 @@ The first vertical slice, with BRD v1.3 key rules end to end:
   - Production keys are refused for UAT-only partners
 - **Usage report:** success and failure counts plus min/max/average latency per API, over a 15-minute default window, filterable by Client ID, with 30-day retention.
 - **Audit log** for every configuration and key action.
-- **Developer Portal:** API catalogue, and key management scoped to the partner's own account.
+- **API documentation:** the Add / Edit API page documents the full contract:
+  - query parameters, request headers, request body fields and a JSON example, with *Generate fields from example*
+  - a response body for each HTTP status code, plus response headers
+  - or import it: **Swagger 2 / OpenAPI 3** (JSON or YAML) or a **Postman v2.x collection**. Load one operation
+    into the form, or import many at once as drafts that stay off the gateways until enabled.
+- **Developer Portal:** API catalogue; clicking an API opens its page with the full contract, a cURL sample and a
+  **Try it live** panel that calls the Sandbox with the partner's own key (never Production). Key management is scoped
+  to the partner's own account.
 
 See [docs/brd-traceability.md](docs/brd-traceability.md) for every requirement's status and what is planned next.
 
@@ -40,6 +47,9 @@ mvn spring-boot:run -Dspring-boot.run.profiles=h2,demo
 ```
 
 This uses an in-memory database, seeds demo data, signs in through dev headers and does not sync to a gateway.
+With no gateway running, *Try it live* runs in `SIMULATE` mode: it still checks the partner's key, then answers from
+the documented examples and says so on screen. With the full stack, set `TRY_IT_MODE=GATEWAY` (the default) so calls go
+through the Sandbox APISIX.
 Then, in two more terminals:
 
 ```bash
@@ -87,7 +97,7 @@ curl -i http://localhost:9080/v1/accounts/balance -H "Host: sandbox-api.apigw.lo
 ## Tests
 
 ```bash
-cd backend && mvn test          # 17 tests: key lifecycle, cooling period, RBAC, usage report, gateway payloads
-cd frontend && npm test         # 6 tests: formatting and error handling
+cd backend && mvn test          # 30 tests: key lifecycle, cooling period, RBAC, usage, gateway payloads, documentation, import, try-it
+cd frontend && npm test         # 11 tests: formatting, error handling, field inference, path parameters
 cd frontend && npm run typecheck && npm run build
 ```

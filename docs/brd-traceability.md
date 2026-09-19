@@ -19,13 +19,13 @@ piece is outstanding · **Planned** = not started · ⚠ = implemented but not y
 
 | ID | Status | Where / what is left |
 |---|---|---|
-| CP-API-01 Add API | Done | `ApiService.create`, Management Portal › APIs |
+| CP-API-01 Add API | Done | `ApiService.create`, Management Portal › APIs › Add API (full-page editor) |
 | CP-API-02 Update API | Done | `ApiService.update` |
 | CP-API-03 Disable API | Done ⚠ | Removes the gateway routes immediately |
 | CP-API-04 Delete API | Partial | Cooling-period guard done; "no active subscriptions" check needs access mapping |
 | CP-API-05 Guest flag | Done | Defaults to No; `ApiLifecycleTest` |
-| CP-API-06 Swagger import | Planned | |
-| CP-API-07 Manual documentation | Planned | Tables proposed in the ER diagram |
+| CP-API-06 Swagger import | Done | Swagger 2 / OpenAPI 3 (JSON, YAML) and Postman v2.x: `ImportService`, `POST /api/admin/apis/import`. Load one operation into the editor, or import many as drafts |
+| CP-API-07 Manual documentation | Done | Editor tabs: Request (query parameters, request headers, body fields + JSON example) and Responses (one body per HTTP status code, response headers). Stored in `api_definition.documentation` (V2) |
 | CP-API-08 Rate limit per API | Done ⚠ | `limit-count` per route, counted per Client ID |
 | CP-API-09 Products | Planned | |
 | CP-API-10 Portal content | Planned | |
@@ -78,8 +78,8 @@ piece is outstanding · **Planned** = not started · ⚠ = implemented but not y
 | ID | Status | Where / what is left |
 |---|---|---|
 | DP-01 Partner login | Done | Keycloak group `/partners/<code>` → partner scope |
-| DP-02 My APIs | Partial | Lists active APIs until mapping exists; full documentation to follow |
-| DP-03 Sandbox testing | Planned | |
+| DP-02 My APIs | Partial | Catalogue → API page with the full contract and a cURL sample. Lists all active APIs until access mapping exists |
+| DP-03 Sandbox testing | Done | *Try it live* on each API page with the partner's own Sandbox key (checked against that partner): path, query, header and body inputs; shows status, latency, headers and body. Production is never callable. `TRY_IT_MODE=SIMULATE` answers from the documented examples when no gateway runs |
 | DP-04 Key status | Done | Masked keys with overlap countdown |
 | DP-05 Self-service regeneration | Done | Warning, then show-once dialog |
 | DP-06 Token APIs | Planned | Keycloak client-credentials clients per partner |

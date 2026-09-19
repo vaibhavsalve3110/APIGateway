@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.apigw.platform.apis.importer.ImportModels.ImportRequest;
+import com.apigw.platform.apis.importer.ImportModels.ImportResult;
+import com.apigw.platform.apis.importer.ImportService;
 import com.apigw.platform.security.CurrentActor;
 
 @RestController
@@ -23,9 +26,11 @@ import com.apigw.platform.security.CurrentActor;
 class ApiController {
 
     private final ApiService apis;
+    private final ImportService importer;
 
-    ApiController(ApiService apis) {
+    ApiController(ApiService apis, ImportService importer) {
         this.apis = apis;
+        this.importer = importer;
     }
 
     @GetMapping
@@ -42,6 +47,12 @@ class ApiController {
     @ResponseStatus(HttpStatus.CREATED)
     ApiView create(@Valid @RequestBody ApiRequest request) {
         return apis.create(request, CurrentActor.get());
+    }
+
+    /** CP-API-06: read a Swagger / OpenAPI file or Postman collection; nothing is saved until the editor saves. */
+    @PostMapping("/import")
+    ImportResult importFile(@Valid @RequestBody ImportRequest request) {
+        return importer.read(request.content());
     }
 
     @PutMapping("/{id}")
