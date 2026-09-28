@@ -75,20 +75,32 @@ public interface UsageRepository extends JpaRepository<UsageEvent, Long> {
             """)
     WindowTotals totalsSince(@Param("from") Instant from);
 
+    /** The same totals for one partner's Client IDs, for their own dashboard. */
+    @Query("""
+            select sum(case when u.statusCode < 400 then 1 else 0 end) as success,
+                   sum(case when u.statusCode >= 400 then 1 else 0 end) as failed,
+                   avg(u.latencyMs) as avgLatency
+            from UsageEvent u
+            where u.occurredAt >= :from and u.clientId in :clientIds
+            """)
+    WindowTotals totalsSinceForClients(@Param("from") Instant from,
+                                       @Param("clientIds") Collection<String> clientIds);
+
     /**
-     * Individual calls for the log viewer. Every filter is optional: a null client id or an empty API list
-     * means "all", and the status range covers the 2xx / 4xx / 5xx buckets the portal offers.
+     * Individual calls for the log viewer. Every filter is optional: the "all" flags cover the unfiltered
+     * case, and the status range covers the 2xx / 4xx / 5xx buckets the portals offer. A partner passes
+     * their own Client IDs here, which is what keeps one partner's log out of another's.
      */
     @Query("""
             select u from UsageEvent u
             where u.occurredAt >= :from and u.occurredAt < :to
-              and (:clientId is null or u.clientId = :clientId)
+              and (:allClients = true or u.clientId in :clientIds)
               and (:allApis = true or u.apiId in :apiIds)
               and u.statusCode >= :minStatus and u.statusCode <= :maxStatus
             order by u.occurredAt desc, u.id desc
             """)
     List<UsageEvent> search(@Param("from") Instant from, @Param("to") Instant to,
-                            @Param("clientId") String clientId,
+                            @Param("allClients") boolean allClients, @Param("clientIds") Collection<String> clientIds,
                             @Param("allApis") boolean allApis, @Param("apiIds") Collection<UUID> apiIds,
                             @Param("minStatus") int minStatus, @Param("maxStatus") int maxStatus,
                             org.springframework.data.domain.Pageable page);

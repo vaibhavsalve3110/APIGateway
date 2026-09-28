@@ -53,7 +53,8 @@ class UsageController {
                         @RequestParam(required = false) String search,
                         @RequestParam(required = false) String clientId,
                         @RequestParam(defaultValue = "200") int limit) {
-        return usage.logs(from, to, status, search, clientId, limit);
+        return usage.logs(from, to, status, search,
+                clientId == null || clientId.isBlank() ? null : List.of(clientId.trim()), limit);
     }
 
     /** CP-RPT-04: who depends on this API, from 30 days of traffic. */

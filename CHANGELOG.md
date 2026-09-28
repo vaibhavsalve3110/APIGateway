@@ -9,6 +9,18 @@ in order, and are recorded in `apim.flyway_schema_history`. The one-time Postgre
 
 ## 2026-09-28
 
+### Developer Portal: the partner's own dashboard
+
+- New landing page for partners: calls, errors, success rate and average latency over the last hour, 24 hours,
+  7 or 30 days, with a per-API breakdown and the 25 most recent calls. Scoped to the partner's own Client IDs,
+  taken from the token, so one organization never sees another's traffic.
+- `/api/partner/dashboard` and `/api/partner/usage/logs` (the partner's own call history, filtered like the
+  Management Portal's).
+- **Empty means zero, not blank.** Both dashboards show 0 for every figure when there is no traffic, with a
+  line explaining why rather than an empty table.
+- Fixed: the new endpoint read the wall clock instead of the application's `Clock`, so the window start
+  disagreed with the rest of the service and every request failed with `INVALID_RANGE`.
+
 ### Developer Portal: Sandbox menu removed
 
 - The standalone Sandbox entry is gone from the partner menu. Sandbox testing happens on each API's own page

@@ -130,8 +130,8 @@ public class UsageService {
      * an operator can search the way they think about an API rather than by id.
      */
     @Transactional(readOnly = true)
-    public List<LogEntry> logs(Instant from, Instant to, StatusFilter status, String apiNameLike, String clientId,
-                               int limit) {
+    public List<LogEntry> logs(Instant from, Instant to, StatusFilter status, String apiNameLike,
+                               Collection<String> clientIds, int limit) {
         Instant end = to != null ? to : clock.instant();
         Instant start = from != null ? from : end.minus(DEFAULT_WINDOW);
         if (!start.isBefore(end)) {
@@ -149,8 +149,13 @@ public class UsageService {
             return List.of();
         }
 
+        // No client ids means every caller; an empty list means this caller has none, so nothing matches.
+        boolean allClients = clientIds == null;
+        if (!allClients && clientIds.isEmpty()) {
+            return List.of();
+        }
         Map<String, Partner> byClientId = partnersByClientId();
-        return usage.search(start, end, clientId == null || clientId.isBlank() ? null : clientId.trim(),
+        return usage.search(start, end, allClients, allClients ? List.of("") : clientIds,
                         allApiIds, allApiIds ? List.of(ZERO_UUID) : apiIds, effective.min, effective.max,
                         PageRequest.of(0, Math.min(Math.max(limit, 1), 1000)))
                 .stream()
@@ -164,8 +169,18 @@ public class UsageService {
 
     @Transactional(readOnly = true)
     public LastHour lastHour(Duration window) {
-        Instant from = clock.instant().minus(window == null ? Duration.ofHours(1) : window);
-        var totals = usage.totalsSince(from);
+        return summarise(clock.instant().minus(window == null ? Duration.ofHours(1) : window), null);
+    }
+
+    /** The same summary for one partner's Client IDs — what they see on their own dashboard. */
+    @Transactional(readOnly = true)
+    public LastHour summaryFor(Collection<String> clientIds, Duration window) {
+        return summarise(clock.instant().minus(window == null ? Duration.ofHours(1) : window), clientIds);
+    }
+
+    private LastHour summarise(Instant from, Collection<String> clientIds) {
+        var totals = clientIds == null ? usage.totalsSince(from)
+                : clientIds.isEmpty() ? null : usage.totalsSinceForClients(from, clientIds);
         long success = totals == null || totals.getSuccess() == null ? 0 : totals.getSuccess();
         long failed = totals == null || totals.getFailed() == null ? 0 : totals.getFailed();
         long total = success + failed;

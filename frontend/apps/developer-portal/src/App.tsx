@@ -6,6 +6,7 @@ import { AuthProvider, ComingSoon, SignInScreen } from "@apigw/ui";
 import { Layout } from "./Layout";
 import { ApiDetailPage } from "./pages/ApiDetailPage";
 import { CataloguePage } from "./pages/CataloguePage";
+import { DashboardPage } from "./pages/DashboardPage";
 import { KeysPage } from "./pages/KeysPage";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -15,7 +16,8 @@ const router = createBrowserRouter([
     path: "/",
     element: <Layout />,
     children: [
-      { index: true, element: <Navigate to="/apis" replace /> },
+      { index: true, element: <Navigate to="/dashboard" replace /> },
+      { path: "dashboard", element: <DashboardPage /> },
       { path: "apis", element: <CataloguePage /> },
       { path: "apis/:id", element: <ApiDetailPage /> },
       { path: "keys", element: <KeysPage /> },

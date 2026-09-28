@@ -5,6 +5,7 @@ import { Chip, LogoMark, useAuth } from "@apigw/ui";
 import { usePartner } from "./usePartner";
 
 const NAV = [
+  { to: "/dashboard", label: "Dashboard" },
   { to: "/apis", label: "My APIs" },
   { to: "/keys", label: "Security keys" },
   { to: "/guides", label: "Guides" },
