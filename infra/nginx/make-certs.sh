@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates a local certificate authority and one wildcard server certificate for *.apigw.localhost.
+# Creates a local certificate authority and one wildcard server certificate for *.apigw.com.
 #
 #   ./make-certs.sh          (Git Bash, WSL, macOS, Linux — needs openssl)
 #
@@ -7,7 +7,7 @@
 # certificates and a private key, and none of it may ever be committed or reused outside a laptop.
 #
 # Browsers reject a self-signed certificate until the CA is trusted. Trusting apigw-local-ca.crt makes
-# every *.apigw.localhost name green; the CA key never leaves this folder, but it can sign any name, so
+# every *.apigw.com name green; the CA key never leaves this folder, but it can sign any name, so
 # delete it (and untrust the CA) when you are finished with the stack.
 set -euo pipefail
 
@@ -49,7 +49,7 @@ echo "==> server key and signing request"
 openssl req -newkey rsa:2048 -sha256 -nodes \
   -keyout "$out/server.key" \
   -out "$out/server.csr" \
-  -subj "/C=IN/O=API Gateway Platform/OU=Local development/CN=apigw.localhost"
+  -subj "/C=IN/O=API Gateway Platform/OU=Local development/CN=apigw.com"
 
 # Every name the stack is reached by. A browser ignores the CN and reads only these.
 cat > "$out/server.ext" <<EXT
@@ -59,11 +59,11 @@ extendedKeyUsage=serverAuth
 subjectAltName=@names
 
 [names]
-DNS.1 = apigw.localhost
-DNS.2 = admin.apigw.localhost
-DNS.3 = developer.apigw.localhost
-DNS.4 = api.apigw.localhost
-DNS.5 = sandbox-api.apigw.localhost
+DNS.1 = apigw.com
+DNS.2 = admin.apigw.com
+DNS.3 = developer.apigw.com
+DNS.4 = api.apigw.com
+DNS.5 = sandbox-api.apigw.com
 DNS.6 = localhost
 IP.1  = 127.0.0.1
 EXT

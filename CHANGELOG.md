@@ -11,12 +11,22 @@ in order, and are recorded in `apim.flyway_schema_history`. The one-time Postgre
 
 ### The whole platform in Docker, behind one nginx with TLS
 
-Not yet run end to end: Docker Desktop would not start on the development machine, so the compose
-file and the nginx configuration are written and reviewed but unverified. Treat the first
-`--profile app` run as a shakedown.
+The stack answers on **`apigw.com`** names: `admin.`, `developer.`, `api.` and `sandbox-api.`.
+
+`apigw.com` is a registered domain that belongs to someone else, so these names only reach the local
+stack because the hosts file says so. Every one of them needs its own line — a hosts file has no
+wildcards, and a missing line silently reaches the real internet instead of failing:
+
+```
+127.0.0.1  apigw.com
+127.0.0.1  admin.apigw.com
+127.0.0.1  developer.apigw.com
+127.0.0.1  api.apigw.com
+127.0.0.1  sandbox-api.apigw.com
+```
 
 - **`infra/nginx/make-certs.sh`** creates a local certificate authority and one certificate covering
-  `apigw.localhost`, `admin.`, `developer.`, `api.`, `sandbox-api.` and `127.0.0.1`. Output goes to
+  `apigw.com`, `admin.`, `developer.`, `api.`, `sandbox-api.` and `127.0.0.1`. Output goes to
   `infra/docker/certs/`, which is git-ignored — it holds a private key that can sign any name, so
   trust the CA while you need it and delete it afterwards. Handles two Windows quirks: a machine-wide
   `OPENSSL_CONF` left behind by PostgreSQL's ODBC driver, and Git Bash rewriting the `/C=IN/...`

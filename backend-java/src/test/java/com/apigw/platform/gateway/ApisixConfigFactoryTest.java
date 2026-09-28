@@ -18,8 +18,8 @@ import com.apigw.platform.config.ApigwProperties;
 class ApisixConfigFactoryTest {
 
     private final ApigwProperties.Gateway gw = new ApigwProperties.Gateway(true, "valkey", 6379, "http://sink",
-            new ApigwProperties.Gateway.Environment("http://sbx:9180", "k1", List.of("sandbox-api.apigw.localhost")),
-            new ApigwProperties.Gateway.Environment("http://prd:9180", "k2", List.of("api.apigw.localhost")));
+            new ApigwProperties.Gateway.Environment("http://sbx:9180", "k1", List.of("sandbox-api.apigw.com")),
+            new ApigwProperties.Gateway.Environment("http://prd:9180", "k2", List.of("api.apigw.com")));
 
     @Test
     @SuppressWarnings("unchecked")
@@ -32,7 +32,7 @@ class ApisixConfigFactoryTest {
         Map<String, Object> plugins = (Map<String, Object>) sandbox.get("plugins");
 
         assertThat(sandbox).containsEntry("uri", "/v1/payments/imps").containsEntry("methods", List.of("POST"))
-                .containsEntry("hosts", List.of("sandbox-api.apigw.localhost"));
+                .containsEntry("hosts", List.of("sandbox-api.apigw.com"));
         assertThat((Map<String, Object>) plugins.get("key-auth")).containsEntry("header", "X-Security-Key")
                 .containsEntry("hide_credentials", true);
         assertThat(plugins.get("serverless-pre-function").toString()).contains("resty.sha256", "X-Security-Key");
@@ -44,7 +44,7 @@ class ApisixConfigFactoryTest {
                 .containsEntry("scheme", "http").containsEntry("nodes", Map.of("mock-sandbox:8080", 1));
 
         Map<String, Object> production = ApisixConfigFactory.route(api, Env.PRODUCTION, gw);
-        assertThat(production).containsEntry("hosts", List.of("api.apigw.localhost"));
+        assertThat(production).containsEntry("hosts", List.of("api.apigw.com"));
         assertThat((Map<String, Object>) production.get("upstream"))
                 .containsEntry("scheme", "https").containsEntry("nodes", Map.of("core.example.in:443", 1));
     }

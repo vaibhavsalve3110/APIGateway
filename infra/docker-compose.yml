@@ -7,10 +7,10 @@
 #   ../nginx/make-certs.sh
 #
 # Then everything is reached over https, by name:
-#   https://admin.apigw.localhost         Management Portal
-#   https://developer.apigw.localhost     Developer Portal
-#   https://sandbox-api.apigw.localhost   partner traffic -> APISIX sandbox
-#   https://api.apigw.localhost           partner traffic -> APISIX production
+#   https://admin.apigw.com         Management Portal
+#   https://developer.apigw.com     Developer Portal
+#   https://sandbox-api.apigw.com   partner traffic -> APISIX sandbox
+#   https://api.apigw.com           partner traffic -> APISIX production
 #
 # Works with Docker Engine (Linux / WSL2), Rancher Desktop or Podman. Docker Desktop needs a paid
 # subscription in organisations above 250 staff or $10M revenue.
@@ -37,7 +37,8 @@ services:
       POSTGRES_DB: apigw
       POSTGRES_USER: apigw
       POSTGRES_PASSWORD: ${DB_PASSWORD:-apigw}
-    ports: ["5432:5432"]
+    # 55432 on the host: the developer machine already runs PostgreSQL on 5432 and the two must not fight.
+    ports: ["55432:5432"]
     volumes: ["pgdata:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U apigw -d apigw"]
@@ -72,7 +73,7 @@ services:
       APISIX_ETCD_PREFIX: /apisix-sandbox
     volumes: ["./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro"]
     ports:
-      - "9080:9080"   # partner traffic — also fronted by nginx as sandbox-api.apigw.localhost
+      - "9080:9080"   # partner traffic — also fronted by nginx as sandbox-api.apigw.com
       - "9180:9180"   # Admin API (backend only)
 
   apisix-production:
@@ -82,7 +83,7 @@ services:
       APISIX_ETCD_PREFIX: /apisix-production
     volumes: ["./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro"]
     ports:
-      - "9081:9080"   # partner traffic — also fronted by nginx as api.apigw.localhost
+      - "9081:9080"   # partner traffic — also fronted by nginx as api.apigw.com
       - "9181:9180"   # Admin API (backend only)
 
   keycloak:
@@ -143,7 +144,7 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-no-reply@apigw.local}
-      PUBLIC_SANDBOX_URL: https://sandbox-api.apigw.localhost
+      PUBLIC_SANDBOX_URL: https://sandbox-api.apigw.com
     expose: ["8088"]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8088/actuator/health"]

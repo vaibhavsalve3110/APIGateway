@@ -65,7 +65,7 @@ apigw:
     # GATEWAY = call the Sandbox gateway; SIMULATE = answer from the documented example (no gateway needed)
     mode: ${TRY_IT_MODE:GATEWAY}
     sandbox-url: ${TRY_IT_SANDBOX_URL:http://localhost:9080}
-    public-sandbox-url: ${PUBLIC_SANDBOX_URL:http://sandbox-api.apigw.localhost:9080}
+    public-sandbox-url: ${PUBLIC_SANDBOX_URL:http://sandbox-api.apigw.com:9080}
     timeout: PT10S
   auth:
     # Signs session tokens; at least 32 characters. Required under the prod profile.
@@ -97,8 +97,8 @@ apigw:
     sandbox:
       admin-url: ${APISIX_SANDBOX_ADMIN_URL:http://localhost:9180}
       admin-key: ${APISIX_SANDBOX_ADMIN_KEY:change-me-sandbox-admin-key}
-      hosts: [sandbox-api.apigw.localhost]
+      hosts: [sandbox-api.apigw.com]
     production:
       admin-url: ${APISIX_PRODUCTION_ADMIN_URL:http://localhost:9181}
       admin-key: ${APISIX_PRODUCTION_ADMIN_KEY:change-me-production-admin-key}
-      hosts: [api.apigw.localhost]
+      hosts: [api.apigw.com]

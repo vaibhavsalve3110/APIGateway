@@ -150,7 +150,7 @@ final class DemoDocumentation {
                                 {
                                   "accountNumber": "5010••••••4412",
                                   "transactionCount": 42,
-                                  "downloadUrl": "https://sandbox-api.apigw.localhost/dl/st_9f2c",
+                                  "downloadUrl": "https://sandbox-api.apigw.com/dl/st_9f2c",
                                   "expiresIn": 900,
                                   "environment": "SANDBOX"
                                 }""", List.of(

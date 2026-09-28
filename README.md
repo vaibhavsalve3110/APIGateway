@@ -127,8 +127,8 @@ cd ../frontend && npm run dev:admin
 | Developer Portal | http://localhost:5175 | `priya.nair@acmefintech.in`, `rahul.shetty@acmefintech.in`, `anita.rao@kaverypayments.in` |
 | Backend API + Swagger UI | http://localhost:8088/swagger-ui.html | |
 | Keycloak admin | http://localhost:8180 | `admin` / `admin` — not used for portal sign-in; kept for the DP-06 token APIs |
-| Sandbox gateway | http://localhost:9080 (host `sandbox-api.apigw.localhost`) | partner key |
-| Production gateway | http://localhost:9081 (host `api.apigw.localhost`) | partner key |
+| Sandbox gateway | http://localhost:9080 (host `sandbox-api.apigw.com`) | partner key |
+| Production gateway | http://localhost:9081 (host `api.apigw.com`) | partner key |
 
 The backend listens on **8088**, because 8080 is commonly taken (on this machine, by an Apache `httpd` service).
 
@@ -137,7 +137,7 @@ The backend listens on **8088**, because 8080 is commonly taken (on this machine
 After generating a Sandbox key for Acme in the Developer Portal:
 
 ```bash
-curl -i http://localhost:9080/v1/accounts/balance -H "Host: sandbox-api.apigw.localhost" -H "X-Security-Key: agw_sbx_…"
+curl -i http://localhost:9080/v1/accounts/balance -H "Host: sandbox-api.apigw.com" -H "X-Security-Key: agw_sbx_…"
 ```
 
 - **200** from the mock backend, with `X-RateLimit-Remaining` headers.
