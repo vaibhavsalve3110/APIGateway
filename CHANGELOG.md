@@ -9,6 +9,13 @@ in order, and are recorded in `apim.flyway_schema_history`. The one-time Postgre
 
 ## 2026-09-28
 
+### Developer Portal: Sandbox menu removed
+
+- The standalone Sandbox entry is gone from the partner menu. Sandbox testing happens on each API's own page
+  through *Try it live*, so a separate console was a dead end. `/sandbox` redirects to the catalogue, so an
+  old bookmark still lands somewhere sensible.
+- Menu is now: My APIs · Security keys · Guides.
+
 ### Products as API journeys (CP-API-09) and Developer Portal content (CP-API-10) — backend
 
 - **Products.** A Product is a journey: the ordered set of APIs a partner calls to complete one business

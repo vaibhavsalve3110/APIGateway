@@ -6,7 +6,6 @@ import { usePartner } from "./usePartner";
 
 const NAV = [
   { to: "/apis", label: "My APIs" },
-  { to: "/sandbox", label: "Sandbox" },
   { to: "/keys", label: "Security keys" },
   { to: "/guides", label: "Guides" },
 ];

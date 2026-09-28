@@ -19,11 +19,8 @@ const router = createBrowserRouter([
       { path: "apis", element: <CataloguePage /> },
       { path: "apis/:id", element: <ApiDetailPage /> },
       { path: "keys", element: <KeysPage /> },
-      {
-        path: "sandbox",
-        element: <ComingSoon title="Sandbox console" brdRefs="DP-03"
-          description="Open any API from your catalogue and use its Try it live panel to call the Sandbox with your own key. A standalone console with saved requests follows." />,
-      },
+      // Sandbox testing lives on each API's own page ("Try it live"), so a separate console is not needed.
+      { path: "sandbox", element: <Navigate to="/apis" replace /> },
       {
         path: "guides",
         element: <ComingSoon title="Guides" brdRefs="DP-06, DP-07"
