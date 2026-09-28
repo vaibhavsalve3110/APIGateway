@@ -14,9 +14,9 @@ COPY tsconfig.json nest-cli.json ./
 COPY src ./src
 RUN npm run build
 
-# Re-resolve without devDependencies for the runtime image, then regenerate the client into that
-# smaller tree (npm prune removes the generated output along with the dev packages).
-RUN npm prune --omit=dev && npx prisma generate
+# Deliberately no `npm prune --omit=dev`: it deletes node_modules/.prisma along with the dev
+# packages, and the client then starts without a query engine ("could not locate the Query Engine
+# for runtime debian-openssl-3.0.x"). A larger image beats a service that cannot reach the database.
 
 FROM node:24-bookworm-slim
 # OpenSSL is a runtime dependency of Prisma's query engine and is not in the slim image.

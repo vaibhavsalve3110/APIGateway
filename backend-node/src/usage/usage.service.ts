@@ -9,6 +9,11 @@ import {
   UsageReport,
 } from './usage.dto';
 
+// Table names are deliberately unqualified. Which schema holds them is a deployment choice —
+// 'apim' under the Java service's local profile, 'public' by default — and Prisma sets the
+// connection's search_path from the ?schema= parameter of DATABASE_URL. Hardcoding a schema here
+// would tie this service to one of those two and fail silently on the other.
+
 /** CP-RPT-01/02 default when no range is given, matching UsageService.DEFAULT_WINDOW. */
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000;
 /** CP-RPT-03: usage data is held online for 30 days; a wider 'from' is clamped, not rejected. */
@@ -43,8 +48,8 @@ export class UsageService {
              a.name AS api_name,
              COUNT(*) FILTER (WHERE u.status_code < 400) AS success,
              COUNT(*) FILTER (WHERE u.status_code >= 400) AS failed
-        FROM apim.usage_event u
-        LEFT JOIN apim.api_definition a ON a.id = u.api_id
+        FROM usage_event u
+        LEFT JOIN api_definition a ON a.id = u.api_id
        WHERE u.occurred_at >= ${start}
          AND u.occurred_at < ${end}
          AND (${clientId ?? null}::varchar IS NULL OR u.client_id = ${clientId ?? null})
@@ -98,9 +103,9 @@ export class UsageService {
       SELECT u.id, u.occurred_at, u.api_id, a.name AS api_name, a.http_method, a.proxy_path,
              u.environment, u.client_id, p.name AS partner_name, p.code AS partner_code,
              u.status_code, u.latency_ms
-        FROM apim.usage_event u
-        LEFT JOIN apim.api_definition a ON a.id = u.api_id
-        LEFT JOIN apim.partner p ON u.client_id IN (p.client_id_sandbox, p.client_id_production)
+        FROM usage_event u
+        LEFT JOIN api_definition a ON a.id = u.api_id
+        LEFT JOIN partner p ON u.client_id IN (p.client_id_sandbox, p.client_id_production)
        WHERE u.occurred_at >= ${start}
          AND u.occurred_at < ${end}
          AND u.status_code BETWEEN ${range.min} AND ${range.max}
@@ -131,8 +136,8 @@ export class UsageService {
     const since = new Date(Date.now() - RETENTION_MS);
     const rows = await this.prisma.$queryRaw<{ name: string }[]>`
       SELECT DISTINCT p.name
-        FROM apim.usage_event u
-        JOIN apim.partner p ON u.client_id IN (p.client_id_sandbox, p.client_id_production)
+        FROM usage_event u
+        JOIN partner p ON u.client_id IN (p.client_id_sandbox, p.client_id_production)
        WHERE u.api_id = ${apiId}::uuid
          AND u.occurred_at >= ${since}
        ORDER BY p.name`;

@@ -167,7 +167,7 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://apigw:${DB_PASSWORD:-apigw}@postgres:5432/apigw?schema=apim
+      DATABASE_URL: postgresql://apigw:${DB_PASSWORD:-apigw}@postgres:5432/apigw?schema=${DB_SCHEMA:-public}
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env — 32+ characters}
       PORT: 8089
     expose: ["8089"]

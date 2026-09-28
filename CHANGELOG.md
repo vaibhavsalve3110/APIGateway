@@ -11,6 +11,9 @@ in order, and are recorded in `apim.flyway_schema_history`. The one-time Postgre
 
 ### The whole platform in Docker, behind one nginx with TLS
 
+Verified end to end: thirteen containers, both portals served over TLS, and the same session token
+accepted by both control planes through nginx.
+
 The stack answers on **`apigw.com`** names: `admin.`, `developer.`, `api.` and `sandbox-api.`.
 
 `apigw.com` is a registered domain that belongs to someone else, so these names only reach the local
@@ -45,6 +48,22 @@ wildcards, and a missing line silently reaches the real internet instead of fail
   schema. The Java image gained `curl` so that health check works.
 - Portals build from the repository root (npm workspaces share `packages/ui`) and are served by nginx
   with an SPA fallback, so refreshing a deep link no longer 404s.
+- The container PostgreSQL publishes **55432**, because a developer machine usually already has
+  PostgreSQL on 5432. It is a separate, empty database — not the one the host services use.
+
+Four things had to be fixed to get the first run green, all worth knowing if you build elsewhere:
+
+- The portal image never copied `tsconfig.base.json`, so `extends` resolved to nothing, `jsx` was
+  lost and the shared `.tsx` components failed with TS6142 — while building fine on a developer
+  machine, where the file is simply there.
+- `npm prune --omit=dev` deletes `node_modules/.prisma` along with the dev packages, leaving the Node
+  service without a query engine. The prune step is gone; `binaryTargets` now names the container's
+  platform explicitly.
+- The Node service's raw SQL no longer names a schema. Which schema holds the tables is a deployment
+  choice — `apim` under the Java service's `local` profile, `public` by default — and Prisma sets the
+  search_path from `?schema=` in `DATABASE_URL`. `DB_SCHEMA` selects it for the container.
+- `CRYPTO_MASTER_KEY` must be **standard** base64. The URL-safe alphabet (`-`, `_`) is rejected by
+  the cipher at startup with `Illegal base64 character 2d`.
 
 ### Backend migration to Node begins — `backend/` is now `backend-java/`
 

@@ -1,5 +1,8 @@
 generator client {
   provider = "prisma-client-js"
+  // "native" covers the developer machine; the Debian target is the container base image
+  // (node:24-bookworm-slim). Without it the image can end up with an engine it cannot use.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {

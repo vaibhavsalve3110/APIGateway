@@ -42,7 +42,7 @@ export class AuditController {
       }[]
     >`
       SELECT id, occurred_at, actor, actor_role, action, object_type, object_id, detail
-        FROM apim.audit_event
+        FROM audit_event
        ORDER BY occurred_at DESC, id DESC
        LIMIT ${capped}`;
 

@@ -10,7 +10,9 @@ FROM node:24-bookworm-slim AS build
 ARG APP
 WORKDIR /src
 
-COPY frontend/package.json frontend/package-lock.json ./
+# tsconfig.base.json is not optional: every app and package extends it, and without it tsc silently
+# loses "jsx": "react-jsx" and fails on the shared .tsx components with TS6142.
+COPY frontend/package.json frontend/package-lock.json frontend/tsconfig.base.json ./
 COPY frontend/packages ./packages
 COPY frontend/apps ./apps
 RUN npm ci
