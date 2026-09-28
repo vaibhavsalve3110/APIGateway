@@ -1,27 +1,23 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { UserManager, WebStorageStateStore, type User } from "oidc-client-ts";
 
 import { createApiClient, type ApiClient } from "./api";
 
 /**
- * Two sign-in modes:
- *  - "oidc": Authorization Code + PKCE against Keycloak (the real thing);
- *  - "dev":  pick a preset identity; the backend accepts X-Dev-* headers only when its dev profile is on.
+ * Sign-in is a CAPTCHA followed by a one-time code e-mailed to the address given (BRD CP-LOG-01): the
+ * platform holds no passwords. A successful code exchange returns a session token, kept in sessionStorage so
+ * a refresh does not sign the user out, and gone when the tab closes.
  */
-export type AuthConfig =
-  | { mode: "oidc"; authority: string; clientId: string }
-  | { mode: "dev"; identities: DevIdentity[] };
-
-export interface DevIdentity {
-  username: string;
-  roles: string[];
-  partnerCode?: string;
-  label: string;
-  description: string;
-}
-
 export interface SignedInUser {
   username: string;
+  roles: string[];
+  partnerCode: string | null;
+}
+
+export interface Session {
+  token: string;
+  expiresAt: string;
+  email: string;
+  displayName: string;
   roles: string[];
   partnerCode: string | null;
 }
@@ -33,7 +29,7 @@ interface AuthState {
 }
 
 const AuthContext = createContext<AuthState | null>(null);
-const DEV_KEY = "apigw.dev-identity";
+const SESSION_KEY = "apigw.session";
 
 export function useAuth(): AuthState & { user: SignedInUser } {
   const state = useContext(AuthContext);
@@ -43,148 +39,117 @@ export function useAuth(): AuthState & { user: SignedInUser } {
   return state as AuthState & { user: SignedInUser };
 }
 
-export function readAuthConfig(env: Record<string, string | undefined>, identities: DevIdentity[]): AuthConfig {
-  if (env.VITE_AUTH_MODE === "oidc") {
-    return {
-      mode: "oidc",
-      authority: env.VITE_OIDC_AUTHORITY ?? "http://localhost:8180/realms/apigw",
-      clientId: env.VITE_OIDC_CLIENT_ID ?? "",
-    };
+function readStoredSession(): Session | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) {
+      return null;
+    }
+    const session = JSON.parse(raw) as Session;
+    return new Date(session.expiresAt).getTime() > Date.now() ? session : null;
+  } catch {
+    return null; // private mode, blocked storage or a corrupt value: just sign in again
   }
-  return { mode: "dev", identities };
+}
+
+export interface SignInProps {
+  /** Called by the sign-in screen once the code has been exchanged for a session. */
+  onSignedIn: (session: Session) => void;
+  /** An unauthenticated client for the /api/auth endpoints. */
+  api: ApiClient;
+  error: string | null;
 }
 
 interface ProviderProps {
-  config: AuthConfig;
-  /** Rendered while signed out; receives the action that starts sign-in. */
+  /** Which roles may use this portal; anyone else is signed out with an explanation. */
+  allowedRoles: string[];
+  portalName: string;
   signIn: (props: SignInProps) => ReactNode;
   children: ReactNode;
 }
 
-export interface SignInProps {
-  mode: AuthConfig["mode"];
-  identities: DevIdentity[];
-  onDevSignIn: (identity: DevIdentity) => void;
-  onOidcSignIn: () => void;
-  error: string | null;
-}
-
-export function AuthProvider({ config, signIn, children }: ProviderProps) {
-  const manager = useMemo(
-    () =>
-      config.mode === "oidc"
-        ? new UserManager({
-            authority: config.authority,
-            client_id: config.clientId,
-            redirect_uri: window.location.origin + "/",
-            post_logout_redirect_uri: window.location.origin + "/",
-            response_type: "code",
-            scope: "openid profile",
-            userStore: new WebStorageStateStore({ store: window.sessionStorage }),
-          })
-        : null,
-    [config],
-  );
-
-  const [oidcUser, setOidcUser] = useState<User | null>(null);
-  const [devIdentity, setDevIdentity] = useState<DevIdentity | null>(() => {
-    const raw = sessionStorage.getItem(DEV_KEY);
-    return raw ? (JSON.parse(raw) as DevIdentity) : null;
-  });
+export function AuthProvider({ allowedRoles, portalName, signIn, children }: ProviderProps) {
+  const [session, setSession] = useState<Session | null>(readStoredSession);
   const [user, setUser] = useState<SignedInUser | null>(null);
-  const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(session != null);
 
   const api = useMemo(
-    () =>
-      createApiClient((): Record<string, string> => {
-        const headers: Record<string, string> = {};
-        if (config.mode === "oidc") {
-          if (oidcUser) {
-            headers.Authorization = `Bearer ${oidcUser.access_token}`;
-          }
-        } else if (devIdentity) {
-          headers["X-Dev-User"] = devIdentity.username;
-          headers["X-Dev-Roles"] = devIdentity.roles.join(",");
-          if (devIdentity.partnerCode) {
-            headers["X-Dev-Partner"] = devIdentity.partnerCode;
-          }
-        }
-        return headers;
-      }),
-    [config.mode, oidcUser, devIdentity],
+    () => createApiClient((): Record<string, string> => (session ? { Authorization: `Bearer ${session.token}` } : {})),
+    [session],
   );
+  const publicApi = useMemo(() => createApiClient(() => ({})), []);
 
-  // Complete an OIDC redirect or pick up an existing session.
-  useEffect(() => {
-    if (!manager) {
-      setReady(true);
-      return;
+  const clearSession = useCallback(() => {
+    try {
+      sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      // nothing to clear
     }
-    const params = new URLSearchParams(window.location.search);
-    const pending = params.has("code") && params.has("state")
-      ? manager.signinRedirectCallback().then((u) => {
-          window.history.replaceState({}, document.title, window.location.pathname);
-          return u;
-        })
-      : manager.getUser();
-    pending
-      .then((u) => setOidcUser(u && !u.expired ? u : null))
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-      .finally(() => setReady(true));
-  }, [manager]);
+    setSession(null);
+    setUser(null);
+  }, []);
 
-  // Ask the backend who we are once we hold credentials.
-  const signedIn = config.mode === "oidc" ? oidcUser != null : devIdentity != null;
+  // Confirm the stored token is still good, and that this user belongs in this portal.
   useEffect(() => {
-    if (!ready || !signedIn) {
+    if (!session) {
       setUser(null);
+      setChecking(false);
       return;
     }
     let cancelled = false;
+    setChecking(true);
     api
-      .get<SignedInUser>("/api/me")
-      .then((me) => !cancelled && setUser(me))
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : String(e));
-          sessionStorage.removeItem(DEV_KEY);
-          setDevIdentity(null);
+      .get<SignedInUser>("/api/auth/me")
+      .then((me) => {
+        if (cancelled) {
+          return;
         }
-      });
+        if (!me.roles.some((role) => allowedRoles.includes(role))) {
+          setError(`This account cannot use the ${portalName}.`);
+          clearSession();
+          return;
+        }
+        setUser(me);
+        setError(null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          clearSession(); // expired or revoked: back to the sign-in screen, quietly
+        }
+      })
+      .finally(() => !cancelled && setChecking(false));
     return () => {
       cancelled = true;
     };
-  }, [ready, signedIn, api]);
+  }, [session, api, allowedRoles, portalName, clearSession]);
 
   const signOut = useCallback(() => {
-    setUser(null);
-    if (manager) {
-      void manager.signoutRedirect();
-    } else {
-      sessionStorage.removeItem(DEV_KEY);
-      setDevIdentity(null);
-    }
-  }, [manager]);
+    setError(null);
+    clearSession();
+  }, [clearSession]);
 
-  if (!ready || (signedIn && !user && !error)) {
+  if (checking) {
     return <div className="empty">Loading…</div>;
   }
   if (!user) {
     return (
       <>
         {signIn({
-          mode: config.mode,
-          identities: config.mode === "dev" ? config.identities : [],
+          api: publicApi,
           error,
-          onDevSignIn: (identity) => {
+          onSignedIn: (next) => {
+            if (!next.roles.some((role) => allowedRoles.includes(role))) {
+              setError(`This account cannot use the ${portalName}.`);
+              return;
+            }
+            try {
+              sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
+            } catch {
+              // the session simply will not survive a refresh
+            }
             setError(null);
-            sessionStorage.setItem(DEV_KEY, JSON.stringify(identity));
-            setDevIdentity(identity);
-          },
-          onOidcSignIn: () => {
-            setError(null);
-            void manager?.signinRedirect();
+            setSession(next);
           },
         })}
       </>

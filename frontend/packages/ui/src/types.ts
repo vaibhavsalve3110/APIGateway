@@ -142,6 +142,48 @@ export interface PartnerView {
   clientIdSandbox: string;
   clientIdProduction: string | null;
   createdAt: string;
+  /** Organization-level request signing; the private key is never stored. */
+  signatureAlgorithm: string | null;
+  signatureFingerprint: string | null;
+  signaturePublicKey: string | null;
+  signatureCreatedAt: string | null;
+  ipvSaltMasked: string | null;
+  ipvSaltCreatedAt: string | null;
+}
+
+export type PartnerUserRole = "PARTNER_ADMIN" | "PARTNER_DEVELOPER" | "PARTNER_VIEWER";
+
+/**
+ * A Developer Portal login belonging to an organization (CP-PTN-04). The signature key pair and IPV salt
+ * belong to the organization, so nothing secret appears here.
+ */
+export interface PartnerUserView {
+  id: string;
+  partnerId: string;
+  partnerCode: string;
+  partnerName: string;
+  fullName: string;
+  email: string;
+  role: PartnerUserRole;
+  status: RecordStatus;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Returned once, when organization credentials are issued: the private key is never retrievable again. */
+export interface IssuedCredentials {
+  partner: PartnerView | null;
+  privateKeyPem: string | null;
+  publicKeyPem: string | null;
+  ipvSalt: string | null;
+  notice: string | null;
+}
+
+export interface RevealedSalt {
+  partnerId: string;
+  ipvSalt: string;
+  createdAt: string;
 }
 
 export interface KeyView {
@@ -181,6 +223,69 @@ export interface UsageReport {
   totalSuccess: number;
   totalFailed: number;
   apis: ApiUsage[];
+}
+
+/** One call reported by a gateway (CP-RPT-02). */
+export interface UsageLogEntry {
+  id: number;
+  occurredAt: string;
+  apiId: string | null;
+  apiName: string;
+  httpMethod: string | null;
+  proxyPath: string | null;
+  environment: Env;
+  clientId: string | null;
+  partnerName: string | null;
+  partnerCode: string | null;
+  statusCode: number;
+  latencyMs: number;
+}
+
+export interface PartnerUsage {
+  clientId: string;
+  partnerName: string | null;
+  partnerCode: string | null;
+  success: number;
+  failed: number;
+  avgLatencyMs: number | null;
+}
+
+/** Management Portal landing page (CP-RPT-01). */
+export interface DashboardSummary {
+  counts: {
+    apis: number;
+    activeApis: number;
+    draftApis: number;
+    disabledApis: number;
+    partners: number;
+    activePartners: number;
+    productionPartners: number;
+    partnerUsers: number;
+  };
+  lastHour: {
+    from: string;
+    success: number;
+    failed: number;
+    successRate: number;
+    avgLatencyMs: number | null;
+  };
+  topApis: ApiUsage[];
+  topPartners: PartnerUsage[];
+}
+
+/** An operational failure recorded in error_event (CP-LOG-05). */
+export interface ErrorView {
+  id: number;
+  occurredAt: string;
+  source: "SMTP" | "GATEWAY" | "SCHEDULER" | "API" | string;
+  code: string;
+  message: string;
+  detail: string | null;
+  actor: string | null;
+  request: string | null;
+  clientIp: string | null;
+  /** Short id quoted to the caller, so a support report can be matched to this row. */
+  reference: string;
 }
 
 export interface AuditView {

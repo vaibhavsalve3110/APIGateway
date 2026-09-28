@@ -11,14 +11,16 @@ spring:
       ddl-auto: validate
   flyway:
     locations: classpath:db/migration
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          # Tokens are issued to the browser by Keycloak on localhost; the backend fetches signing keys
-          # from wherever Keycloak is reachable (override KEYCLOAK_JWKS_URI when running in Docker).
-          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/apigw}
-          jwk-set-uri: ${KEYCLOAK_JWKS_URI:http://localhost:8180/realms/apigw/protocol/openid-connect/certs}
+  # Sign-in is e-mail OTP: the platform mints and verifies its own session tokens (see AuthConfig),
+  # so no OAuth2 resource-server settings are needed. Mail is optional locally; see OtpMailer.
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:true}
 
 server:
   port: ${SERVER_PORT:8088}
@@ -30,6 +32,11 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    # Mail is optional (OtpMailer logs the code when no SMTP host is set), so a missing mail server
+    # must not make the service look unhealthy to a load balancer.
+    mail:
+      enabled: false
 
 springdoc:
   swagger-ui:
@@ -57,6 +64,27 @@ apigw:
     sandbox-url: ${TRY_IT_SANDBOX_URL:http://localhost:9080}
     public-sandbox-url: ${PUBLIC_SANDBOX_URL:http://sandbox-api.apigw.localhost:9080}
     timeout: PT10S
+  auth:
+    # Signs session tokens; at least 32 characters. Required under the prod profile.
+    jwt-secret: ${AUTH_JWT_SECRET:}
+    token-ttl: PT8H
+    otp-ttl: PT5M
+    otp-length: 6
+    max-attempts: 5
+    resend-cooldown: PT30S
+    max-requests-per-window: 5
+    request-window: PT15M
+    mail-from: ${MAIL_FROM:no-reply@apigw.local}
+    # true: an unregistered address is told so ("Invalid user"), which is what operators expect.
+    # false: it gets the same answer as a registered one, so nobody can discover who holds an account.
+    # Consider false for an internet-facing Developer Portal.
+    reveal-unknown-email: ${REVEAL_UNKNOWN_EMAIL:true}
+    # First Management Portal account, created only when the table is empty (see PlatformUserBootstrap).
+    bootstrap-admin: ${BOOTSTRAP_ADMIN:admin@apigw.local}
+  crypto:
+    # 32 random bytes, base64: openssl rand -base64 32. Required under the prod profile; without it,
+    # local runs fall back to a built-in development key and log a warning.
+    master-key: ${CRYPTO_MASTER_KEY:}
   gateway:
     enabled: ${GATEWAY_SYNC_ENABLED:true}
     redis-host: ${GATEWAY_REDIS_HOST:valkey}

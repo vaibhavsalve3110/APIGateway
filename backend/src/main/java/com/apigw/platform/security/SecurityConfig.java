@@ -19,6 +19,9 @@ import com.apigw.platform.config.ApigwProperties;
 /**
  * Role-based access (BRD CP-LOG-04): Admin manages everything, Editor reads APIs and usage,
  * partner users reach only their own account under {@code /api/partner}.
+ *
+ * <p>Sessions come from {@code /api/auth} (CAPTCHA plus an e-mailed one-time code) and are carried as a
+ * bearer token this service signs and verifies itself.
  */
 @Configuration
 public class SecurityConfig {
@@ -31,9 +34,13 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // Sign-in: CAPTCHA and one-time code. Throttled inside OtpService.
+                        .requestMatchers("/api/auth/captcha", "/api/auth/otp/**").permitAll()
+                        .requestMatchers("/api/auth/me").authenticated()
                         // Gateway log shipping; authenticated with the ingest token inside the controller.
                         .requestMatchers(HttpMethod.POST, "/internal/usage/batch").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/admin/apis/**", "/api/admin/usage/**").hasAnyRole("ADMIN", "EDITOR")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/apis/**", "/api/admin/usage/**",
+                                "/api/admin/dashboard/**", "/api/admin/dashboard").hasAnyRole("ADMIN", "EDITOR")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/partner/**").hasRole("PARTNER")
                         .requestMatchers("/api/me").authenticated()

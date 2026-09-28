@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,8 @@ import com.apigw.platform.apis.ApiRepository;
 import com.apigw.platform.common.ApiException;
 import com.apigw.platform.common.Env;
 import com.apigw.platform.config.ApigwProperties;
+import com.apigw.platform.partners.Partner;
+import com.apigw.platform.partners.PartnerRepository;
 import com.apigw.platform.usage.UsageRepository.ApiUsageRow;
 
 /** Usage ingestion from the gateways and the API usage report (BRD 5.1.5). */
@@ -39,14 +42,20 @@ public class UsageService {
     /** CP-RPT-02: default window on first load. */
     public static final Duration DEFAULT_WINDOW = Duration.ofMinutes(15);
 
+    /** Placeholder id for the "all APIs" case: JPQL needs a non-empty list even when the flag ignores it. */
+    private static final UUID ZERO_UUID = new UUID(0, 0);
+
     private final UsageRepository usage;
     private final ApiRepository apis;
+    private final PartnerRepository partners;
     private final Clock clock;
     private final Duration retention;
 
-    public UsageService(UsageRepository usage, ApiRepository apis, Clock clock, ApigwProperties props) {
+    public UsageService(UsageRepository usage, ApiRepository apis, PartnerRepository partners, Clock clock,
+                        ApigwProperties props) {
         this.usage = usage;
         this.apis = apis;
+        this.partners = partners;
         this.clock = clock;
         this.retention = props.usage().retention();
     }
@@ -95,6 +104,125 @@ public class UsageService {
     @Transactional(readOnly = true)
     public List<String> consumersOf(UUID apiId) {
         return usage.clientsOfApi(apiId, clock.instant().minus(retention));
+    }
+
+    /** One line per call, for the log viewer. */
+    public record LogEntry(long id, Instant occurredAt, UUID apiId, String apiName, String httpMethod,
+                           String proxyPath, Env environment, String clientId, String partnerName,
+                           String partnerCode, int statusCode, int latencyMs) {
+    }
+
+    /** Which status codes a filter covers; {@code ALL} is everything the gateway reported. */
+    public enum StatusFilter {
+        ALL(0, 999), SUCCESS(0, 399), CLIENT_ERROR(400, 499), SERVER_ERROR(500, 599), ERROR(400, 999);
+
+        private final int min;
+        private final int max;
+
+        StatusFilter(int min, int max) {
+            this.min = min;
+            this.max = max;
+        }
+    }
+
+    /**
+     * Calls matching the filters, newest first. {@code apiNameLike} matches the API's name or proxy path, so
+     * an operator can search the way they think about an API rather than by id.
+     */
+    @Transactional(readOnly = true)
+    public List<LogEntry> logs(Instant from, Instant to, StatusFilter status, String apiNameLike, String clientId,
+                               int limit) {
+        Instant end = to != null ? to : clock.instant();
+        Instant start = from != null ? from : end.minus(DEFAULT_WINDOW);
+        if (!start.isBefore(end)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_RANGE", "'from' must be before 'to'");
+        }
+        StatusFilter effective = status == null ? StatusFilter.ALL : status;
+
+        List<ApiDefinition> allApis = apis.findAll();
+        Map<UUID, ApiDefinition> apiById = allApis.stream()
+                .collect(Collectors.toMap(ApiDefinition::getId, Function.identity()));
+        // An empty search means every API; a search that matches nothing must return nothing, not everything.
+        boolean allApiIds = apiNameLike == null || apiNameLike.isBlank();
+        List<UUID> apiIds = allApiIds ? List.of() : matching(allApis, apiNameLike);
+        if (!allApiIds && apiIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<String, Partner> byClientId = partnersByClientId();
+        return usage.search(start, end, clientId == null || clientId.isBlank() ? null : clientId.trim(),
+                        allApiIds, allApiIds ? List.of(ZERO_UUID) : apiIds, effective.min, effective.max,
+                        PageRequest.of(0, Math.min(Math.max(limit, 1), 1000)))
+                .stream()
+                .map(e -> toLogEntry(e, apiById, byClientId))
+                .toList();
+    }
+
+    /** Counts for the dashboard: the last hour of traffic, plus how much is configured. */
+    public record LastHour(Instant from, long success, long failed, double successRate, Integer avgLatencyMs) {
+    }
+
+    @Transactional(readOnly = true)
+    public LastHour lastHour(Duration window) {
+        Instant from = clock.instant().minus(window == null ? Duration.ofHours(1) : window);
+        var totals = usage.totalsSince(from);
+        long success = totals == null || totals.getSuccess() == null ? 0 : totals.getSuccess();
+        long failed = totals == null || totals.getFailed() == null ? 0 : totals.getFailed();
+        long total = success + failed;
+        Double avg = totals == null ? null : totals.getAvgLatency();
+        return new LastHour(from, success, failed,
+                total == 0 ? 0 : BigDecimal.valueOf(success * 100.0 / total).setScale(2, RoundingMode.HALF_UP).doubleValue(),
+                avg == null ? null : (int) Math.round(avg));
+    }
+
+    /** Calls per partner in a window — who is actually using the platform. */
+    public record PartnerUsage(String clientId, String partnerName, String partnerCode, long success, long failed,
+                               Integer avgLatencyMs) {
+    }
+
+    @Transactional(readOnly = true)
+    public List<PartnerUsage> byPartner(Duration window) {
+        Instant from = clock.instant().minus(window == null ? Duration.ofHours(1) : window);
+        Map<String, Partner> byClientId = partnersByClientId();
+        return usage.aggregateByClientSince(from).stream()
+                .map(r -> {
+                    Partner p = byClientId.get(r.getClientId());
+                    return new PartnerUsage(r.getClientId(), p == null ? null : p.getName(),
+                            p == null ? null : p.getCode(), r.getSuccess(), r.getFailed(),
+                            r.getAvgLatency() == null ? null : (int) Math.round(r.getAvgLatency()));
+                })
+                .sorted(Comparator.comparingLong((PartnerUsage u) -> u.success() + u.failed()).reversed())
+                .toList();
+    }
+
+    private Map<String, Partner> partnersByClientId() {
+        Map<String, Partner> byClientId = new java.util.HashMap<>();
+        for (Partner p : partners.findAll()) {
+            byClientId.put(p.getClientIdSandbox(), p);
+            if (p.getClientIdProduction() != null) {
+                byClientId.put(p.getClientIdProduction(), p);
+            }
+        }
+        return byClientId;
+    }
+
+    private static List<UUID> matching(List<ApiDefinition> allApis, String search) {
+        String needle = search.trim().toLowerCase(java.util.Locale.ROOT);
+        return allApis.stream()
+                .filter(a -> a.getName().toLowerCase(java.util.Locale.ROOT).contains(needle)
+                        || a.getProxyPath().toLowerCase(java.util.Locale.ROOT).contains(needle))
+                .map(ApiDefinition::getId)
+                .toList();
+    }
+
+    private static LogEntry toLogEntry(UsageEvent e, Map<UUID, ApiDefinition> apiById, Map<String, Partner> byClientId) {
+        ApiDefinition api = e.getApiId() == null ? null : apiById.get(e.getApiId());
+        Partner partner = e.getClientId() == null ? null : byClientId.get(e.getClientId());
+        return new LogEntry(e.getId(), e.getOccurredAt(), e.getApiId(),
+                api != null ? api.getName() : "Deleted API", api != null ? api.getHttpMethod() : null,
+                api != null ? api.getProxyPath() : null, e.getEnvironment(), e.getClientId(),
+                partner != null ? partner.getName() : null, partner != null ? partner.getCode() : null,
+                e.getStatusCode(), e.getLatencyMs());
     }
 
     /** Accepts an http-logger batch. Unparseable entries are skipped rather than failing the batch. */

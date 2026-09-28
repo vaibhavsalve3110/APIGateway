@@ -1,0 +1,45 @@
+# Copy to backend/config/application-local.yml (that folder is git-ignored) and fill in the secrets below.
+# Loaded only by the "local" profile, after the packaged settings, so anything here wins.
+spring:
+  datasource:
+    # The password you set for the apigw role (infra/postgres/local-setup.sql, step 2).
+    password: change-me
+
+  # ---------------------------------------------------------------------------------------------
+  # Sending real sign-in codes. Leave this out entirely and the code is logged and shown on the
+  # sign-in screen instead (development only). Uncomment ONE of the blocks below.
+  #
+  # Your own mail relay — the usual choice inside a bank or broker. Often no credentials, port 25,
+  # and the relay only accepts connections from known hosts:
+  # mail:
+  #   host: smtp.yourcompany.co.in
+  #   port: 25
+  #   properties:
+  #     mail.smtp.auth: false
+  #     mail.smtp.starttls.enable: false
+  #
+  # Microsoft 365:
+  # mail:
+  #   host: smtp.office365.com
+  #   port: 587
+  #   username: no-reply@yourcompany.co.in
+  #   password: <mailbox or app password>
+  #   properties:
+  #     mail.smtp.auth: true
+  #     mail.smtp.starttls.enable: true
+  #
+  # Gmail — needs 2-step verification on the account and a 16-character App Password
+  # (myaccount.google.com → Security → App passwords). Your normal password will not work:
+  # mail:
+  #   host: smtp.gmail.com
+  #   port: 587
+  #   username: you@gmail.com
+  #   password: <16-character app password>
+  #   properties:
+  #     mail.smtp.auth: true
+  #     mail.smtp.starttls.enable: true
+
+# The address recipients see in the From line. Set it to something your relay is allowed to send as.
+apigw:
+  auth:
+    mail-from: no-reply@apigw.local

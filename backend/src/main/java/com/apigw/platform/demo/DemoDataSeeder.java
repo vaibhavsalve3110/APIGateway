@@ -21,6 +21,9 @@ import com.apigw.platform.apis.ApiRequest;
 import com.apigw.platform.apis.ApiService;
 import com.apigw.platform.apis.ApiView;
 import com.apigw.platform.apis.RateWindow;
+import com.apigw.platform.auth.PlatformRole;
+import com.apigw.platform.auth.PlatformUser;
+import com.apigw.platform.auth.PlatformUserRepository;
 import com.apigw.platform.common.Env;
 import com.apigw.platform.partners.AccessTier;
 import com.apigw.platform.partners.PartnerDtos.GroupRequest;
@@ -29,6 +32,9 @@ import com.apigw.platform.partners.PartnerDtos.PartnerRequest;
 import com.apigw.platform.partners.PartnerDtos.PartnerView;
 import com.apigw.platform.partners.PartnerRepository;
 import com.apigw.platform.partners.PartnerService;
+import com.apigw.platform.partnerusers.PartnerUserDtos;
+import com.apigw.platform.partnerusers.PartnerUserRole;
+import com.apigw.platform.partnerusers.PartnerUserService;
 import com.apigw.platform.security.Actor;
 import com.apigw.platform.usage.UsageEvent;
 import com.apigw.platform.usage.UsageRepository;
@@ -48,13 +54,18 @@ class DemoDataSeeder implements ApplicationRunner {
     private static final String MOCK_PRODUCTION = "http://mock-production:8080";
 
     private final PartnerService partners;
+    private final PartnerUserService partnerUsers;
+    private final PlatformUserRepository platformUsers;
     private final PartnerRepository partnerRepository;
     private final ApiService apis;
     private final UsageRepository usage;
     private final Clock clock;
 
     DemoDataSeeder(PartnerService partners, PartnerRepository partnerRepository, ApiService apis,
+                   PartnerUserService partnerUsers, PlatformUserRepository platformUsers,
                    UsageRepository usage, Clock clock) {
+        this.partnerUsers = partnerUsers;
+        this.platformUsers = platformUsers;
         this.partners = partners;
         this.partnerRepository = partnerRepository;
         this.apis = apis;
@@ -76,16 +87,31 @@ class DemoDataSeeder implements ApplicationRunner {
     }
 
     private void seed() {
+        // Internal sign-ins for the Management Portal. Sign-in is an e-mailed code, so no passwords here.
+        platformUsers.save(new PlatformUser(UUID.randomUUID(), "vaibhav.admin@apigw.local", "Vaibhav Salve",
+                PlatformRole.ADMIN, SEED.username(), clock.instant()));
+        platformUsers.save(new PlatformUser(UUID.randomUUID(), "ravi.editor@apigw.local", "Ravi Kumar",
+                PlatformRole.EDITOR, SEED.username(), clock.instant()));
+
         GroupView tier1 = partners.createGroup(new GroupRequest("Tier-1 Aggregators", "Large payment aggregators"), SEED);
         GroupView tier2 = partners.createGroup(new GroupRequest("Tier-2 Partners", "Regional fintech partners"), SEED);
         GroupView broking = partners.createGroup(new GroupRequest("Broking Partners", "Stock-broking integrations"), SEED);
         partners.createGroup(new GroupRequest("Internal Consumers", "In-house channels using the gateway"), SEED);
 
-        PartnerView acme = partners.create(new PartnerRequest("Acme Fintech Pvt Ltd", tier1.id(), "integrations@acmefintech.in"), SEED);
-        PartnerView kavery = partners.create(new PartnerRequest("Kavery Payments", tier2.id(), "integrations@kaverypayments.in"), SEED);
+        // Registration returns the organization's credentials once; the demo keeps only the view.
+        PartnerView acme = partners.create(new PartnerRequest("Acme Fintech Pvt Ltd", tier1.id(), "integrations@acmefintech.in"), SEED).partner();
+        PartnerView kavery = partners.create(new PartnerRequest("Kavery Payments", tier2.id(), "integrations@kaverypayments.in"), SEED).partner();
         partners.create(new PartnerRequest("Northstar Capital", tier1.id(), "api@northstarcapital.in"), SEED);
         partners.create(new PartnerRequest("Meridian Broking", broking.id(), "apisupport@meridianbroking.in"), SEED);
         partners.changeTier(kavery.id(), AccessTier.PRODUCTION, SEED);
+
+        // Portal logins. Several users per organization; they share the organization's credentials.
+        partnerUsers.create(acme.id(), new PartnerUserDtos.CreateRequest(
+                "Priya Nair", "priya.nair@acmefintech.in", PartnerUserRole.PARTNER_ADMIN), SEED);
+        partnerUsers.create(acme.id(), new PartnerUserDtos.CreateRequest(
+                "Rahul Shetty", "rahul.shetty@acmefintech.in", PartnerUserRole.PARTNER_DEVELOPER), SEED);
+        partnerUsers.create(kavery.id(), new PartnerUserDtos.CreateRequest(
+                "Anita Rao", "anita.rao@kaverypayments.in", PartnerUserRole.PARTNER_ADMIN), SEED);
 
         List<ApiView> created = new ArrayList<>();
         created.add(api("Fund Transfer — IMPS", "Payments", "POST", "/v1/payments/imps", "/core/imps", 300,
@@ -106,7 +132,7 @@ class DemoDataSeeder implements ApplicationRunner {
 
         seedUsage(created, List.of(acme.clientIdSandbox(), kavery.clientIdSandbox(),
                 partnerRepository.findById(kavery.id()).orElseThrow().getClientIdProduction()));
-        log.info("Demo data seeded: 4 partner groups, 4 partners, 6 APIs, 24 h of synthetic usage");
+        log.info("Demo data seeded: 2 internal users, 4 partner groups, 4 partners, 3 portal users, 6 APIs, 24 h of synthetic usage");
     }
 
     private ApiView api(String name, String category, String method, String path, String backendPath, int limit,

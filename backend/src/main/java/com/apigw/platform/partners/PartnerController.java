@@ -18,7 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 import com.apigw.platform.partners.PartnerDtos.GroupRequest;
 import com.apigw.platform.partners.PartnerDtos.GroupView;
 import com.apigw.platform.partners.PartnerDtos.PartnerRequest;
+import com.apigw.platform.partners.PartnerDtos.IssuedCredentials;
 import com.apigw.platform.partners.PartnerDtos.PartnerView;
+import com.apigw.platform.partners.PartnerDtos.RevealedSalt;
+import com.apigw.platform.partners.PartnerDtos.UpdateRequest;
 import com.apigw.platform.partners.PartnerDtos.StatusRequest;
 import com.apigw.platform.partners.PartnerDtos.TierRequest;
 import com.apigw.platform.security.CurrentActor;
@@ -28,9 +31,11 @@ import com.apigw.platform.security.CurrentActor;
 class PartnerController {
 
     private final PartnerService partners;
+    private final PartnerCredentialService credentials;
 
-    PartnerController(PartnerService partners) {
+    PartnerController(PartnerService partners, PartnerCredentialService credentials) {
         this.partners = partners;
+        this.credentials = credentials;
     }
 
     @GetMapping("/partner-groups")
@@ -54,10 +59,32 @@ class PartnerController {
         return partners.view(id);
     }
 
+    /** Registering an organization also issues its signature key pair and IPV salt, returned once here. */
     @PostMapping("/partners")
     @ResponseStatus(HttpStatus.CREATED)
-    PartnerView create(@Valid @RequestBody PartnerRequest request) {
+    IssuedCredentials create(@Valid @RequestBody PartnerRequest request) {
         return partners.create(request, CurrentActor.get());
+    }
+
+    @PutMapping("/partners/{id}")
+    PartnerView update(@PathVariable UUID id, @Valid @RequestBody UpdateRequest request) {
+        return partners.update(id, request, CurrentActor.get());
+    }
+
+    /** Recreates the organization's signature key pair; the new private key is shown once. */
+    @PostMapping("/partners/{id}/signature")
+    IssuedCredentials regenerateSignature(@PathVariable UUID id) {
+        return credentials.regenerateSignature(id, CurrentActor.get());
+    }
+
+    @PostMapping("/partners/{id}/ipv-salt")
+    IssuedCredentials rotateIpvSalt(@PathVariable UUID id) {
+        return credentials.rotateIpvSalt(id, CurrentActor.get());
+    }
+
+    @PostMapping("/partners/{id}/ipv-salt/reveal")
+    RevealedSalt revealIpvSalt(@PathVariable UUID id) {
+        return credentials.revealIpvSalt(id, CurrentActor.get());
     }
 
     @PutMapping("/partners/{id}/access-tier")

@@ -3,7 +3,8 @@ import { Link } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  ApiError, Chip, ErrorBanner, Field, Modal, PageHeader, StatusChip, useAuth, type GroupView, type PartnerView,
+  ApiError, Chip, ErrorBanner, Field, IssuedCredentialsModal, Modal, PageHeader, StatusChip, useAuth,
+  type GroupView, type IssuedCredentials, type PartnerView,
 } from "@apigw/ui";
 
 /** Groups & partners (design: Partners.dc.html; BRD CP-PTN-01, CP-PTN-02, CP-PTN-07). */
@@ -12,6 +13,7 @@ export function PartnersPage() {
   const queryClient = useQueryClient();
   const [group, setGroup] = useState<string | "ALL">("ALL");
   const [adding, setAdding] = useState<"partner" | "group" | null>(null);
+  const [issued, setIssued] = useState<IssuedCredentials | null>(null);
 
   const groups = useQuery({ queryKey: ["groups"], queryFn: () => api.get<GroupView[]>("/api/admin/partner-groups") });
   const partners = useQuery({ queryKey: ["partners"], queryFn: () => api.get<PartnerView[]>("/api/admin/partners") });
@@ -68,9 +70,10 @@ export function PartnersPage() {
         </div>
       </div>
 
+      {issued ? <IssuedCredentialsModal issued={issued} onClose={() => setIssued(null)} /> : null}
       {adding === "group" ? <GroupModal onClose={() => setAdding(null)} onSaved={refresh} /> : null}
       {adding === "partner" ? (
-        <PartnerModal groups={groups.data ?? []} defaultGroup={group === "ALL" ? undefined : group}
+        <PartnerModal onRegistered={setIssued} groups={groups.data ?? []} defaultGroup={group === "ALL" ? undefined : group}
           onClose={() => setAdding(null)} onSaved={refresh} />
       ) : null}
     </div>
@@ -113,16 +116,18 @@ function GroupModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
   );
 }
 
-function PartnerModal({ groups, defaultGroup, onClose, onSaved }: {
+function PartnerModal({ groups, defaultGroup, onClose, onSaved, onRegistered }: {
+  onRegistered: (issued: IssuedCredentials) => void;
   groups: GroupView[]; defaultGroup?: string; onClose: () => void; onSaved: () => void;
 }) {
   const { api } = useAuth();
   const [name, setName] = useState("");
   const [groupId, setGroupId] = useState(defaultGroup ?? groups[0]?.id ?? "");
   const [contactEmail, setContactEmail] = useState("");
+  // Registering an organization issues its signature key pair and IPV salt, shown once.
   const save = useMutation({
-    mutationFn: () => api.post<PartnerView>("/api/admin/partners", { name, groupId, contactEmail: contactEmail || null }),
-    onSuccess: () => { onSaved(); onClose(); },
+    mutationFn: () => api.post<IssuedCredentials>("/api/admin/partners", { name, groupId, contactEmail: contactEmail || null }),
+    onSuccess: (result) => { onSaved(); onClose(); onRegistered(result); },
   });
   const fields = save.error instanceof ApiError ? save.error.fields : {};
   return (

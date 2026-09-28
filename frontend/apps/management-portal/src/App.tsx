@@ -1,20 +1,19 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 
-import { AuthProvider, ComingSoon, readAuthConfig, SignInScreen, type DevIdentity } from "@apigw/ui";
+import { AuthProvider, ComingSoon, SignInScreen } from "@apigw/ui";
 
 import { Shell } from "./Shell";
 import { ApiEditorPage } from "./pages/ApiEditorPage";
 import { ApisPage } from "./pages/ApisPage";
+import { ApiLogsPage } from "./pages/ApiLogsPage";
 import { AuditPage } from "./pages/AuditPage";
+import { DashboardPage } from "./pages/DashboardPage";
+import { ErrorsPage } from "./pages/ErrorsPage";
 import { PartnerDetailPage } from "./pages/PartnerDetailPage";
 import { PartnersPage } from "./pages/PartnersPage";
+import { PartnerUsersPage } from "./pages/PartnerUsersPage";
 import { UsagePage } from "./pages/UsagePage";
-
-const identities: DevIdentity[] = [
-  { username: "vaibhav.admin", roles: ["ADMIN"], label: "Admin", description: "Full control — APIs, partners, keys, users" },
-  { username: "ravi.editor", roles: ["EDITOR"], label: "Editor", description: "Reads APIs and usage; edits documentation" },
-];
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -25,19 +24,18 @@ const router = createBrowserRouter([
     path: "/",
     element: <Shell />,
     children: [
-      { index: true, element: <Navigate to="/apis" replace /> },
+      { index: true, element: <Navigate to="/dashboard" replace /> },
+      { path: "dashboard", element: <DashboardPage /> },
+      { path: "logs", element: <ApiLogsPage /> },
       { path: "apis", element: <ApisPage /> },
       { path: "apis/new", element: <ApiEditorPage /> },
       { path: "apis/:id", element: <ApiEditorPage /> },
       { path: "partners", element: <PartnersPage /> },
       { path: "partners/:id", element: <PartnerDetailPage /> },
+      { path: "partner-users", element: <PartnerUsersPage /> },
       { path: "usage", element: <UsagePage /> },
       { path: "audit", element: <AuditPage /> },
-      {
-        path: "dashboard",
-        element: <ComingSoon title="Dashboard" brdRefs="phase 2"
-          description="Gateway health, traffic and the items needing attention, as in the Dashboard design." />,
-      },
+      { path: "errors", element: <ErrorsPage /> },
       {
         path: "products",
         element: <ComingSoon title="Products & portal content" brdRefs="CP-API-09, CP-API-10"
@@ -67,7 +65,8 @@ const router = createBrowserRouter([
 export function App() {
   return (
     <AuthProvider
-      config={readAuthConfig(import.meta.env, identities)}
+      allowedRoles={["ADMIN", "EDITOR"]}
+      portalName="Management Portal"
       signIn={(props) => (
         <SignInScreen
           {...props}
@@ -75,7 +74,7 @@ export function App() {
           product="Management Portal"
           headline="One place to govern every API you expose."
           points={[
-            "Environment segregation enforced at the gateway, not just in the UI",
+            "Sign in with a one-time code sent to your work e-mail — no passwords to steal",
             "Keys shown once and stored only as hashes, with a 20-minute rotation overlap",
             "Every configuration change audited with user, time and detail",
           ]}

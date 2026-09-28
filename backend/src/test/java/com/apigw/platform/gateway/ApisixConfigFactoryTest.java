@@ -77,7 +77,10 @@ class ApisixConfigFactoryTest {
         ApigwProperties props = new ApigwProperties(new ApigwProperties.Keys(Duration.ofMinutes(20)),
                 new ApigwProperties.Apis(Duration.ofDays(7)), new ApigwProperties.Usage(Duration.ofDays(30), "t0k"),
                 new ApigwProperties.Security(false), gw,
-                new ApigwProperties.TryIt("SIMULATE", "http://sbx:9080", "http://sandbox-api:9080", Duration.ofSeconds(5)));
+                new ApigwProperties.TryIt("SIMULATE", "http://sbx:9080", "http://sandbox-api:9080", Duration.ofSeconds(5)),
+                new ApigwProperties.Crypto(null),
+                new ApigwProperties.Auth(null, Duration.ofHours(8), Duration.ofMinutes(5), 6, 5,
+                        Duration.ofSeconds(30), 5, Duration.ofMinutes(15), "no-reply@apigw.local", true));
         Map<String, Object> logger = (Map<String, Object>) ((Map<String, Object>) ApisixConfigFactory
                 .usageLogger(Env.SANDBOX, props).get("plugins")).get("http-logger");
         assertThat(logger).containsEntry("uri", "http://sink").containsEntry("auth_header", "Ingest t0k");

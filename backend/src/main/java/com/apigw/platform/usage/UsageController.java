@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.apigw.platform.common.ApiException;
 import com.apigw.platform.config.ApigwProperties;
+import com.apigw.platform.usage.UsageService.LogEntry;
+import com.apigw.platform.usage.UsageService.StatusFilter;
 import com.apigw.platform.usage.UsageService.UsageReport;
 
 @RestController
@@ -38,6 +40,20 @@ class UsageController {
                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
                        @RequestParam(required = false) String clientId) {
         return usage.report(from, to, clientId == null || clientId.isBlank() ? null : List.of(clientId.trim()));
+    }
+
+    /**
+     * Individual calls, newest first: filter by time range, status bucket, API name or path, and Client ID.
+     * This is the log viewer behind Management Portal › API Logs.
+     */
+    @GetMapping("/api/admin/usage/logs")
+    List<LogEntry> logs(@RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
+                        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to,
+                        @RequestParam(required = false) StatusFilter status,
+                        @RequestParam(required = false) String search,
+                        @RequestParam(required = false) String clientId,
+                        @RequestParam(defaultValue = "200") int limit) {
+        return usage.logs(from, to, status, search, clientId, limit);
     }
 
     /** CP-RPT-04: who depends on this API, from 30 days of traffic. */

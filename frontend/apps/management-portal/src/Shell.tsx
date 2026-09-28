@@ -20,7 +20,7 @@ const icon = (d: string) => (
 );
 
 const sections: { title: string; items: NavItem[] }[] = [
-  { title: "Overview", items: [{ to: "/dashboard", label: "Dashboard", icon: icon("M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"), planned: true }] },
+  { title: "Overview", items: [{ to: "/dashboard", label: "Dashboard", icon: icon("M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z") }] },
   {
     title: "API Management",
     items: [
@@ -32,6 +32,7 @@ const sections: { title: string; items: NavItem[] }[] = [
     title: "Partners",
     items: [
       { to: "/partners", label: "Groups & Partners", icon: icon("M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 4.3a3.2 3.2 0 1 1 0 6.4 3.2 3.2 0 0 1 0-6.4"), adminOnly: true },
+      { to: "/partner-users", label: "Partner Users", icon: icon("M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 3.5a3.2 3.2 0 1 1 0 6.4 3.2 3.2 0 0 1 0-6.4M23 21v-2a4 4 0 0 0-3-3.9M16 3.6a4 4 0 0 1 0 7.8"), adminOnly: true },
       { to: "/mapping", label: "Access Mapping", icon: icon("m9 11 3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"), planned: true, adminOnly: true },
       { to: "/domains", label: "Domains", icon: icon("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20ZM2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"), planned: true, adminOnly: true },
     ],
@@ -40,7 +41,9 @@ const sections: { title: string; items: NavItem[] }[] = [
     title: "Reporting & Security",
     items: [
       { to: "/usage", label: "API Usage", icon: icon("M3 3v18h18M7 15l3.5-4 3 2.5L20 7") },
+      { to: "/logs", label: "API Logs", icon: icon("M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"), adminOnly: false },
       { to: "/audit", label: "Audit Log", icon: icon("M12 2 4 5.5v6c0 5 3.4 9 8 10.5 4.6-1.5 8-5.5 8-10.5v-6L12 2Z"), adminOnly: true },
+      { to: "/errors", label: "System Errors", icon: icon("M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"), adminOnly: true },
       { to: "/users", label: "Users & Roles", icon: icon("M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"), planned: true, adminOnly: true },
     ],
   },

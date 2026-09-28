@@ -5,9 +5,10 @@ h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:32px 0 8px}p{color:#5b
 .card{background:#fff;border:1px solid #dfe3e8;border-radius:8px;padding:16px;overflow-x:auto}</style></head><body>
 <h1>API Gateway platform — database ER diagram</h1>
 <p>Generated from docs/database/er-diagram.md. Open in a browser with internet access (Mermaid loads from a CDN).</p>
-<h2>Implemented — migrations V1, V2</h2><div class="card"><pre class="mermaid">erDiagram
+<h2>Implemented — migrations V1-V6</h2><div class="card"><pre class="mermaid">erDiagram
     PARTNER_GROUP ||--o{ PARTNER : "contains"
     PARTNER ||--o{ SECURITY_KEY : "holds"
+    PARTNER ||--o{ PARTNER_USER : "has portal users"
     API_DEFINITION ||--o{ USAGE_EVENT : "logical: api_id"
     PARTNER ||--o{ USAGE_EVENT : "logical: client_id"
 
@@ -29,6 +30,9 @@ h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:32px 0 8px}p{color:#5b
         varchar contact_email
         varchar client_id_sandbox UK "rate limits counted per Client ID"
         varchar client_id_production UK "null until Production is granted"
+        varchar signature_public_key "V4 - organization signing"
+        varchar signature_fingerprint
+        varchar ipv_salt_cipher "AES-256-GCM"
         timestamptz created_at
         timestamptz updated_at
     }
@@ -44,6 +48,44 @@ h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:32px 0 8px}p{color:#5b
         varchar created_by
         timestamptz expires_at "end of 20-min overlap"
         timestamptz ended_at
+    }
+
+    PARTNER_USER {
+        uuid id PK
+        uuid partner_id FK
+        varchar email UK "portal sign-in"
+        varchar full_name
+        varchar role
+        varchar status
+        timestamptz created_at
+    }
+
+    PLATFORM_USER {
+        uuid id PK
+        varchar email UK
+        varchar full_name
+        varchar role "ADMIN | EDITOR"
+        varchar status
+        timestamptz last_login_at
+    }
+
+    ERROR_EVENT {
+        bigint id PK
+        timestamptz occurred_at
+        varchar source "SMTP | GATEWAY | SCHEDULER | API"
+        varchar code
+        varchar message
+        varchar detail "stack trace"
+        varchar reference "shown to the caller"
+    }
+
+    OTP_CHALLENGE {
+        uuid id PK
+        varchar email
+        varchar code_hash
+        timestamptz expires_at
+        int attempts
+        timestamptz consumed_at
     }
 
     API_DEFINITION {

@@ -1,0 +1,32 @@
+# Local PostgreSQL (database apigw, schema apim) without Docker: no gateway sync, developer sign-in headers.
+# One-time database setup: infra/postgres/local-setup.sql
+#   mvn spring-boot:run -Dspring-boot.run.profiles=local,demo     (from backend/)
+#
+# The password is not stored here. Put it in backend/config/application-local.yml (git-ignored; copy
+# backend/config.example/application-local.yml), or set DB_PASSWORD. Spring loads ./config/ after the
+# packaged files, so that copy overrides this one; run from backend/, or pass
+# --spring.config.additional-location=file:<abs path>/backend/config/ as the launch config does.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/apigw?currentSchema=apim}
+    username: ${DB_USER:apigw}
+    # No password here on purpose: an imported document ranks BELOW the file that imports it, so setting
+    # the password in this file would always override config/local-secrets.yml. The base application.yml
+    # default (${DB_PASSWORD:apigw}) applies when that file is absent.
+  flyway:
+    # Migrations run inside apim; the schema itself is created by local-setup.sql.
+    default-schema: apim
+    schemas: apim
+    create-schemas: false
+  jpa:
+    properties:
+      hibernate:
+        default_schema: apim
+
+apigw:
+  security:
+    dev-auth-enabled: true
+  gateway:
+    enabled: false
+  try-it:
+    mode: SIMULATE

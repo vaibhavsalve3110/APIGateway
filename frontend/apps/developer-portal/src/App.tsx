@@ -1,24 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 
-import { AuthProvider, ComingSoon, readAuthConfig, SignInScreen, type DevIdentity } from "@apigw/ui";
+import { AuthProvider, ComingSoon, SignInScreen } from "@apigw/ui";
 
 import { Layout } from "./Layout";
 import { ApiDetailPage } from "./pages/ApiDetailPage";
 import { CataloguePage } from "./pages/CataloguePage";
 import { KeysPage } from "./pages/KeysPage";
-
-// Partner codes match the demo seed (backend profile "demo") and the Keycloak demo realm.
-const identities: DevIdentity[] = [
-  {
-    username: "integrations@acmefintech.in", roles: ["PARTNER"], partnerCode: "PTN-00001",
-    label: "Acme Fintech Pvt Ltd", description: "UAT-only partner — Production is withheld",
-  },
-  {
-    username: "integrations@kaverypayments.in", roles: ["PARTNER"], partnerCode: "PTN-00002",
-    label: "Kavery Payments", description: "Production + UAT partner",
-  },
-];
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 
@@ -48,16 +36,17 @@ const router = createBrowserRouter([
 export function App() {
   return (
     <AuthProvider
-      config={readAuthConfig(import.meta.env, identities)}
+      allowedRoles={["PARTNER"]}
+      portalName="Developer Portal"
       signIn={(props) => (
         <SignInScreen
           {...props}
           product="Developer Portal"
           headline="Your APIs, your documentation, your keys."
           points={[
+            "Sign in with a one-time code sent to your registered e-mail address",
             "Only the APIs mapped to your organisation — nothing more",
-            "Test against the Sandbox with your own key",
-            "Rotate keys yourself, with a 20-minute overlap for cut-over",
+            "Test against the Sandbox with your own key, and rotate keys yourself",
           ]}
         />
       )}

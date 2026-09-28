@@ -19,7 +19,9 @@ import com.apigw.platform.gateway.GatewayClient;
 import com.apigw.platform.partners.PartnerDtos.GroupRequest;
 import com.apigw.platform.partners.PartnerDtos.GroupView;
 import com.apigw.platform.partners.PartnerDtos.PartnerRequest;
+import com.apigw.platform.partners.PartnerDtos.IssuedCredentials;
 import com.apigw.platform.partners.PartnerDtos.PartnerView;
+import com.apigw.platform.partners.PartnerDtos.UpdateRequest;
 import com.apigw.platform.security.Actor;
 
 /** Partner groups, partners and their access tier (BRD 5.1.3). */
@@ -32,15 +34,18 @@ public class PartnerService {
     private final PartnerRepository partners;
     private final PartnerGroupRepository groups;
     private final GatewayClient gateway;
+    private final PartnerCredentialService credentials;
     private final AuditService audit;
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public PartnerService(PartnerRepository partners, PartnerGroupRepository groups, GatewayClient gateway,
-                          AuditService audit, ApplicationEventPublisher events, Clock clock) {
+                          PartnerCredentialService credentials, AuditService audit,
+                          ApplicationEventPublisher events, Clock clock) {
         this.partners = partners;
         this.groups = groups;
         this.gateway = gateway;
+        this.credentials = credentials;
         this.audit = audit;
         this.events = events;
         this.clock = clock;
@@ -90,19 +95,39 @@ public class PartnerService {
         return partners.findByCode(code).orElseThrow(() -> ApiException.notFound("Partner", code));
     }
 
+    /**
+     * Registers an organization: issues its Client ID, gateway consumer, signature key pair and IPV salt.
+     * The private key and salt are returned once, here, and never again.
+     */
     @Transactional
-    public PartnerView create(PartnerRequest request, Actor actor) {
+    public IssuedCredentials create(PartnerRequest request, Actor actor) {
         PartnerGroup group = groups.findById(request.groupId())
                 .orElseThrow(() -> ApiException.notFound("Partner group", request.groupId()));
         String name = request.name().trim();
         Partner partner = new Partner(UUID.randomUUID(), nextCode(), name, group.getId(), request.contactEmail(),
                 uniqueClientId(name, Env.SANDBOX), clock.instant());
-        partners.saveAndFlush(partner);
-        gateway.ensureConsumer(Env.SANDBOX, partner.getClientIdSandbox(), partner.getCode(), partner.getName());
-        audit.record(actor, "CREATE", AUDIT_PARTNER, partner.getId(),
-                partner.getName() + " (" + partner.getCode() + ") added to " + group.getName()
-                        + " with UAT-only access; sandbox Client ID " + partner.getClientIdSandbox());
-        return PartnerView.of(partner, group.getName());
+        // The id is assigned, so save() merges: keep the managed copy, or later changes are lost.
+        Partner saved = partners.saveAndFlush(partner);
+        gateway.ensureConsumer(Env.SANDBOX, saved.getClientIdSandbox(), saved.getCode(), saved.getName());
+        audit.record(actor, "CREATE", AUDIT_PARTNER, saved.getId(),
+                saved.getName() + " (" + saved.getCode() + ") added to " + group.getName()
+                        + " with UAT-only access; sandbox Client ID " + saved.getClientIdSandbox());
+        IssuedCredentials issued = credentials.issueInitial(saved, actor);
+        return credentials.withView(issued, PartnerView.of(saved, group.getName()));
+    }
+
+    /** CP-PTN-02: correct the organization's name or contact address. */
+    @Transactional
+    public PartnerView update(UUID id, UpdateRequest request, Actor actor) {
+        Partner partner = require(id);
+        String before = partner.getName() + " <" + (partner.getContactEmail() == null ? "" : partner.getContactEmail()) + ">";
+        partner.updateDetails(request.name().trim(),
+                request.contactEmail() == null || request.contactEmail().isBlank() ? null : request.contactEmail().trim(),
+                clock.instant());
+        audit.record(actor, "UPDATE", AUDIT_PARTNER, id,
+                "Organization details changed from " + before + " to " + partner.getName()
+                        + " <" + (partner.getContactEmail() == null ? "" : partner.getContactEmail()) + ">");
+        return toView(partner);
     }
 
     /** CP-PTN-05 / CP-PTN-06. Granting Production issues a Production Client ID on the Production gateway. */

@@ -199,3 +199,6 @@ p { margin: 0; }
 a.api-card { color: var(--text); text-decoration: none; transition: border-color 0.12s, box-shadow 0.12s; }
 a.api-card:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(20, 50, 100, 0.08); text-decoration: none; }
 a.api-card:hover .api-card-name { color: var(--accent); }
+
+/* The sign-in brand panel is decoration: drop it when the form needs the room. */
+@media (max-width: 1000px) { .signin-brand { display: none !important; } }

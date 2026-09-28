@@ -7,7 +7,32 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** Platform settings bound from the {@code apigw.*} block of application.yml. */
 @ConfigurationProperties("apigw")
-public record ApigwProperties(Keys keys, Apis apis, Usage usage, Security security, Gateway gateway, TryIt tryIt) {
+public record ApigwProperties(Keys keys, Apis apis, Usage usage, Security security, Gateway gateway, TryIt tryIt,
+                              Crypto crypto, Auth auth) {
+
+    /**
+     * Sign-in: a CAPTCHA, then a one-time code by e-mail (no passwords are held by the platform).
+     *
+     * @param jwtSecret           signs session tokens; at least 32 characters, required under prod
+     * @param tokenTtl            how long a session lasts before the user signs in again
+     * @param otpTtl              how long a code stays valid
+     * @param otpLength           digits in a code
+     * @param maxAttempts         wrong guesses allowed before a code is dead
+     * @param resendCooldown      wait between two codes for one address
+     * @param maxRequestsPerWindow codes per address inside requestWindow
+     */
+    public record Auth(String jwtSecret, Duration tokenTtl, Duration otpTtl, int otpLength, int maxAttempts,
+                       Duration resendCooldown, int maxRequestsPerWindow, Duration requestWindow,
+                       String mailFrom, boolean revealUnknownEmail) {
+    }
+
+    /**
+     * Master key for secrets the platform must read back, such as a partner user's IPV salt:
+     * 32 random bytes, base64-encoded. Required under the prod profile; see
+     * {@link com.apigw.platform.crypto.SecretCipher}.
+     */
+    public record Crypto(String masterKey) {
+    }
 
     /**
      * Developer Portal "Try it live" (BRD DP-03) — always the Sandbox, never Production.

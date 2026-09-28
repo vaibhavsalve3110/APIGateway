@@ -1,6 +1,7 @@
 package com.apigw.platform.support;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -20,7 +21,9 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import com.jayway.jsonpath.JsonPath;
 
 /** Full application on H2 with a controllable clock and a recording gateway. */
-@SpringBootTest(properties = "apigw.scheduling.enabled=false")
+// spring.mail.host is cleared here on purpose: backend/config/application.yml is read by every run,
+// including this one, and a test suite must never reach a real mail server.
+@SpringBootTest(properties = {"apigw.scheduling.enabled=false", "spring.mail.host="})
 @AutoConfigureMockMvc
 @ActiveProfiles("h2")
 @Import(TestSupport.class)
@@ -60,8 +63,19 @@ public abstract class IntegrationTest {
         return JsonPath.read(body, "$.id");
     }
 
-    /** Creates a UAT-only partner in a fresh group; returns the response JSON. */
+    /**
+     * Registers a UAT-only organization in a fresh group and returns its PartnerView JSON.
+     * Registration itself returns {@code IssuedCredentials}; {@link #registerPartner} exposes that.
+     */
     protected String createPartner(String name) throws Exception {
+        String id = JsonPath.read(registerPartner(name), "$.partner.id");
+        return mvc.perform(get("/api/admin/partners/{id}", id).with(admin()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+    }
+
+    /** The registration response, including the organization credentials issued once. */
+    protected String registerPartner(String name) throws Exception {
         String groupId = createGroup(name + " group " + UUID.randomUUID());
         return mvc.perform(post("/api/admin/partners").with(admin())
                         .contentType(MediaType.APPLICATION_JSON)

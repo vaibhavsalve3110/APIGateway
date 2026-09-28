@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 
 import com.apigw.platform.common.ApiException;
 import com.apigw.platform.common.Env;
+import com.apigw.platform.partnerusers.SignatureKeyMaterial;
 
 /** An Integration Partner account (BRD CP-PTN-02). */
 @Entity
@@ -48,6 +49,32 @@ public class Partner {
     @Column(name = "client_id_production")
     private String clientIdProduction;
 
+    /**
+      * Organization-level request-signing key pair: only the public half is stored, exactly as for
+      * security keys. Nullable only until PartnerCredentialBackfill has run for rows created before V4.
+      */
+    @Column(name = "signature_algorithm")
+    private String signatureAlgorithm;
+
+    @Column(name = "signature_public_key", length = 4000)
+    private String signaturePublicKey;
+
+    @Column(name = "signature_fingerprint")
+    private String signatureFingerprint;
+
+    @Column(name = "signature_created_at")
+    private Instant signatureCreatedAt;
+
+    /** Shared secret, so it is stored encrypted (AES-GCM) rather than hashed. */
+    @Column(name = "ipv_salt_cipher", length = 500)
+    private String ipvSaltCipher;
+
+    @Column(name = "ipv_salt_masked")
+    private String ipvSaltMasked;
+
+    @Column(name = "ipv_salt_created_at")
+    private Instant ipvSaltCreatedAt;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -69,6 +96,60 @@ public class Partner {
         this.status = RecordStatus.ACTIVE;
         this.createdAt = now;
         this.updatedAt = now;
+    }
+
+    public void applySignature(SignatureKeyMaterial signature, Instant now) {
+        this.signatureAlgorithm = signature.algorithm();
+        this.signaturePublicKey = signature.publicKeyPem();
+        this.signatureFingerprint = signature.fingerprint();
+        this.signatureCreatedAt = now;
+        this.updatedAt = now;
+    }
+
+    public void applyIpvSalt(String cipher, String masked, Instant now) {
+        this.ipvSaltCipher = cipher;
+        this.ipvSaltMasked = masked;
+        this.ipvSaltCreatedAt = now;
+        this.updatedAt = now;
+    }
+
+    public boolean hasCredentials() {
+        return signaturePublicKey != null && ipvSaltCipher != null;
+    }
+
+    /** CP-PTN-02: the organization's name and contact address can be corrected after registration. */
+    public void updateDetails(String name, String contactEmail, Instant now) {
+        this.name = name;
+        this.contactEmail = contactEmail;
+        this.updatedAt = now;
+    }
+
+    public String getSignatureAlgorithm() {
+        return signatureAlgorithm;
+    }
+
+    public String getSignaturePublicKey() {
+        return signaturePublicKey;
+    }
+
+    public String getSignatureFingerprint() {
+        return signatureFingerprint;
+    }
+
+    public Instant getSignatureCreatedAt() {
+        return signatureCreatedAt;
+    }
+
+    public String getIpvSaltCipher() {
+        return ipvSaltCipher;
+    }
+
+    public String getIpvSaltMasked() {
+        return ipvSaltMasked;
+    }
+
+    public Instant getIpvSaltCreatedAt() {
+        return ipvSaltCreatedAt;
     }
 
     /** Granting Production issues a Production Client ID; revoking keeps it on record but blocks new keys. */
