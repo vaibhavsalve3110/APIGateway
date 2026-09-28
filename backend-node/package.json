@@ -1,0 +1,53 @@
+{
+  "name": "@apigw/platform-backend-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NestJS + Fastify control plane for the API Gateway platform. Runs against the same PostgreSQL schema and the same JWT secret as backend-java, so the two can serve the portals side by side during the migration.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main.js",
+    "lint": "eslint \"{src,test}/**/*.ts\" --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:pull": "prisma db pull && prisma generate",
+    "db:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@fastify/helmet": "^13.0.1",
+    "@fastify/static": "^10.1.5",
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/platform-fastify": "^11.1.6",
+    "@nestjs/swagger": "^11.2.0",
+    "@prisma/client": "^6.16.2",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "fastify": "^5.6.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.10",
+    "@nestjs/schematics": "^11.0.8",
+    "@nestjs/testing": "^11.1.6",
+    "@types/node": "^24.5.2",
+    "@types/passport-jwt": "^4.0.1",
+    "eslint": "^9.36.0",
+    "prisma": "^6.16.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.0",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

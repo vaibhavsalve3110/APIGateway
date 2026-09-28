@@ -44,7 +44,7 @@ flowchart LR
 
 | Component | Owns |
 |---|---|
-| **Platform backend** (`backend/`) | System of record: APIs, partners, keys, usage, audit. Enforces the business rules (cooling period, overlap window, tiers) and pushes the result to the gateways. |
+| **Platform backend** (`backend-java/`) | System of record: APIs, partners, keys, usage, audit. Enforces the business rules (cooling period, overlap window, tiers) and pushes the result to the gateways. |
 | **APISIX gateways** (`infra/`) | Runtime enforcement only. One deployment per environment, so a sandbox credential never exists on Production. |
 | **Keycloak** | No longer used for portal sign-in (that is e-mail OTP inside the platform). Kept in the compose file for the partner token APIs planned under DP-06. |
 | **Sign-in** | CAPTCHA plus a one-time code e-mailed to the user, handled by the backend's `auth` package; the session is an HS256 token the platform signs and verifies itself, carrying the same claims the Keycloak token used to. |

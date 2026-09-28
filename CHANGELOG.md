@@ -9,6 +9,28 @@ in order, and are recorded in `apim.flyway_schema_history`. The one-time Postgre
 
 ## 2026-09-28
 
+### Backend migration to Node begins — `backend/` is now `backend-java/`
+
+Work happens on the `node-migration` branch; `main` is untouched until the port is proven.
+
+- **`backend/` is renamed `backend-java/`.** Nothing inside it changed. The Java service stays the
+  system of record and stays runnable, so the decision is reversible at any point. Documentation, the
+  PostgreSQL setup script and `.gitignore` follow the new path; if you have a local checkout, your
+  `backend/config/` moved with it and needs no edits.
+- **New `backend-node/`: NestJS 11 on Fastify, Prisma 6, TypeScript 5.9.** It runs against the *same*
+  database and the *same* signing secret as the Java service, on port 8089.
+- **The schema stays Flyway's.** Prisma is introspection-only (`npm run db:pull`); `prisma migrate` is
+  never run, because two tools writing DDL to one database is how environments drift apart.
+- **Tokens are interchangeable.** The Node service verifies exactly what `TokenService` mints — HS256,
+  issuer `apigw-platform`, roles under `realm_access.roles`, a partner's organization as
+  `groups: ["/partners/<CODE>"]`. One portal session works against either backend, which is what makes
+  a gradual cutover possible. Both must share `AUTH_JWT_SECRET`.
+- **First endpoints ported**, read-only and verified against live data: `/api/admin/usage/report`,
+  `/api/admin/usage/logs`, `/api/admin/usage/apis/{id}/consumers`, `/api/admin/audit` and
+  `/actuator/health` (same shape as Actuator's, so probes do not care which backend answers).
+  Window defaults, the 30-day retention clamp and the `INVALID_RANGE` error match the Java service.
+- Copy `backend-node/.env.example` to `backend-node/.env` and fill it in before running.
+
 ### Security keys: Partner Admin only, confirmed before, announced after
 
 Rotating a key breaks every live integration that has not switched over, so it is now a deliberate act with

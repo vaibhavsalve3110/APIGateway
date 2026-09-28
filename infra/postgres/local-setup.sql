@@ -6,7 +6,7 @@
 --
 -- Tables are NOT created here. Flyway creates them in schema apim, and records the history in
 -- apim.flyway_schema_history, when the backend first starts with the "local" profile
--- (backend/src/main/resources/db/migration/V1__baseline.sql, V2__api_documentation.sql, ...).
+-- (backend-java/src/main/resources/db/migration/V1__baseline.sql, V2__api_documentation.sql, ...).
 --
 -- Run as the PostgreSQL superuser, from a terminal (psql asks for passwords, input is hidden):
 --   "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -h localhost -f infra/postgres/local-setup.sql
@@ -38,11 +38,11 @@ REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 --      "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -h localhost -d postgres
 --      ALTER ROLE apigw WITH PASSWORD 'your-password';
 --    (\password apigw is silently skipped when psql runs a file with -f, which is why it is not used here.)
---    Then put the same password in backend/config/application-local.yml (git-ignored).
+--    Then put the same password in backend-java/config/application-local.yml (git-ignored).
 
 \echo
 \echo 'Done: database apigw, schema apim, role apigw.'
 \echo 'NEXT: the apigw role has no password yet. In an interactive psql as postgres, run:'
 \echo '  ALTER ROLE apigw WITH PASSWORD ''your-password'';'
-\echo 'Put the same password in backend/config/application-local.yml, then start the backend'
+\echo 'Put the same password in backend-java/config/application-local.yml, then start the backend'
 \echo 'with profiles local,demo — Flyway creates the tables in apim.'

@@ -1,4 +1,4 @@
-# Copy to backend/config/application-local.yml (that folder is git-ignored) and fill in the secrets below.
+# Copy to backend-java/config/application-local.yml (that folder is git-ignored) and fill in the secrets below.
 # Loaded only by the "local" profile, after the packaged settings, so anything here wins.
 spring:
   datasource:

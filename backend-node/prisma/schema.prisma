@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["apim"]
+}
+
+model api_definition {
+  id                     String         @id @db.Uuid
+  name                   String         @db.VarChar(160)
+  category               String         @db.VarChar(60)
+  http_method            String         @db.VarChar(10)
+  proxy_path             String         @db.VarChar(200)
+  backend_url_sandbox    String         @db.VarChar(300)
+  backend_url_production String?        @db.VarChar(300)
+  status                 String         @db.VarChar(20)
+  guest_visible          Boolean
+  rate_limit_count       Int
+  rate_limit_window      String         @db.VarChar(10)
+  owner_team             String?        @db.VarChar(120)
+  description            String?        @db.VarChar(2000)
+  disabled_at            DateTime?      @db.Timestamptz(6)
+  created_at             DateTime       @db.Timestamptz(6)
+  updated_at             DateTime       @db.Timestamptz(6)
+  documentation          String?        @db.VarChar(200000)
+  product_step           product_step[]
+
+  @@unique([http_method, proxy_path], map: "uq_api_route")
+  @@schema("apim")
+}
+
+model audit_event {
+  id          BigInt   @id @default(autoincrement())
+  occurred_at DateTime @db.Timestamptz(6)
+  actor       String   @db.VarChar(120)
+  actor_role  String?  @db.VarChar(30)
+  action      String   @db.VarChar(40)
+  object_type String   @db.VarChar(40)
+  object_id   String?  @db.VarChar(80)
+  detail      String?  @db.VarChar(1000)
+
+  @@index([occurred_at], map: "ix_audit_event_time")
+  @@schema("apim")
+}
+
+model error_event {
+  id          BigInt   @id @default(autoincrement())
+  occurred_at DateTime @db.Timestamptz(6)
+  source      String   @db.VarChar(40)
+  code        String   @db.VarChar(60)
+  message     String   @db.VarChar(1000)
+  detail      String?  @db.VarChar(8000)
+  actor       String?  @db.VarChar(120)
+  request     String?  @db.VarChar(300)
+  client_ip   String?  @db.VarChar(60)
+  reference   String   @db.VarChar(40)
+
+  @@index([occurred_at(sort: Desc)], map: "idx_error_event_occurred")
+  @@index([source, occurred_at(sort: Desc)], map: "idx_error_event_source")
+  @@schema("apim")
+}
+
+model flyway_schema_history {
+  installed_rank Int      @id(map: "flyway_schema_history_pk")
+  version        String?  @db.VarChar(50)
+  description    String   @db.VarChar(200)
+  type           String   @db.VarChar(20)
+  script         String   @db.VarChar(1000)
+  checksum       Int?
+  installed_by   String   @db.VarChar(100)
+  installed_on   DateTime @default(now()) @db.Timestamp(6)
+  execution_time Int
+  success        Boolean
+
+  @@index([success], map: "flyway_schema_history_s_idx")
+  @@schema("apim")
+}
+
+model otp_challenge {
+  id          String    @id @db.Uuid
+  email       String    @db.VarChar(200)
+  code_hash   String    @db.VarChar(80)
+  created_at  DateTime  @db.Timestamptz(6)
+  expires_at  DateTime  @db.Timestamptz(6)
+  attempts    Int
+  consumed_at DateTime? @db.Timestamptz(6)
+  client_ip   String?   @db.VarChar(60)
+
+  @@index([email, created_at], map: "idx_otp_email_created")
+  @@schema("apim")
+}
+
+model partner {
+  id                    String               @id @db.Uuid
+  code                  String               @unique @db.VarChar(20)
+  name                  String               @db.VarChar(160)
+  group_id              String               @db.Uuid
+  access_tier           String               @db.VarChar(20)
+  status                String               @db.VarChar(20)
+  contact_email         String?              @db.VarChar(200)
+  client_id_sandbox     String               @unique @db.VarChar(64)
+  client_id_production  String?              @unique @db.VarChar(64)
+  created_at            DateTime             @db.Timestamptz(6)
+  updated_at            DateTime             @db.Timestamptz(6)
+  signature_algorithm   String?              @db.VarChar(40)
+  signature_public_key  String?              @db.VarChar(4000)
+  signature_fingerprint String?              @db.VarChar(120)
+  signature_created_at  DateTime?            @db.Timestamptz(6)
+  ipv_salt_cipher       String?              @db.VarChar(500)
+  ipv_salt_masked       String?              @db.VarChar(60)
+  ipv_salt_created_at   DateTime?            @db.Timestamptz(6)
+  partner_group         partner_group        @relation(fields: [group_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  partner_user          partner_user[]
+  product_assignment    product_assignment[]
+  security_key          security_key[]
+
+  @@schema("apim")
+}
+
+model partner_group {
+  id          String    @id @db.Uuid
+  name        String    @unique @db.VarChar(120)
+  description String?   @db.VarChar(500)
+  status      String    @db.VarChar(20)
+  created_at  DateTime  @db.Timestamptz(6)
+  partner     partner[]
+
+  @@schema("apim")
+}
+
+model partner_user {
+  id                 String               @id @db.Uuid
+  partner_id         String               @db.Uuid
+  email              String               @unique @db.VarChar(200)
+  full_name          String               @db.VarChar(160)
+  role               String               @db.VarChar(30)
+  status             String               @db.VarChar(20)
+  created_at         DateTime             @db.Timestamptz(6)
+  created_by         String               @db.VarChar(120)
+  updated_at         DateTime             @db.Timestamptz(6)
+  partner            partner              @relation(fields: [partner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product_assignment product_assignment[]
+
+  @@index([partner_id], map: "idx_partner_user_partner")
+  @@schema("apim")
+}
+
+model platform_user {
+  id            String    @id @db.Uuid
+  email         String    @unique @db.VarChar(200)
+  full_name     String    @db.VarChar(160)
+  role          String    @db.VarChar(20)
+  status        String    @db.VarChar(20)
+  created_at    DateTime  @db.Timestamptz(6)
+  created_by    String    @db.VarChar(120)
+  updated_at    DateTime  @db.Timestamptz(6)
+  last_login_at DateTime? @db.Timestamptz(6)
+
+  @@schema("apim")
+}
+
+model portal_page {
+  id                  String                @id @db.Uuid
+  slug                String                @unique @db.VarChar(140)
+  title               String                @db.VarChar(160)
+  category            String                @db.VarChar(60)
+  status              String                @db.VarChar(20)
+  position            Int
+  created_at          DateTime              @db.Timestamptz(6)
+  created_by          String                @db.VarChar(120)
+  updated_at          DateTime              @db.Timestamptz(6)
+  published_at        DateTime?             @db.Timestamptz(6)
+  published_version   String?               @db.Uuid
+  portal_page_version portal_page_version[]
+
+  @@schema("apim")
+}
+
+model portal_page_version {
+  id            String      @id @db.Uuid
+  page_id       String      @db.Uuid
+  version       Int
+  body_markdown String      @db.VarChar(100000)
+  edited_by     String      @db.VarChar(120)
+  edited_at     DateTime    @db.Timestamptz(6)
+  portal_page   portal_page @relation(fields: [page_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([page_id, version])
+  @@index([page_id, version(sort: Desc)], map: "idx_page_version_page")
+  @@schema("apim")
+}
+
+model product {
+  id                 String               @id @db.Uuid
+  name               String               @unique @db.VarChar(120)
+  slug               String               @unique @db.VarChar(140)
+  summary            String?              @db.VarChar(300)
+  description        String?              @db.VarChar(4000)
+  journey_markdown   String?              @db.VarChar(100000)
+  status             String               @db.VarChar(20)
+  created_at         DateTime             @db.Timestamptz(6)
+  created_by         String               @db.VarChar(120)
+  updated_at         DateTime             @db.Timestamptz(6)
+  published_at       DateTime?            @db.Timestamptz(6)
+  product_assignment product_assignment[]
+  product_step       product_step[]
+
+  @@schema("apim")
+}
+
+model product_assignment {
+  id              String        @id @db.Uuid
+  product_id      String        @db.Uuid
+  partner_id      String        @db.Uuid
+  partner_user_id String?       @db.Uuid
+  assigned_by     String        @db.VarChar(120)
+  assigned_at     DateTime      @db.Timestamptz(6)
+  partner         partner       @relation(fields: [partner_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  partner_user    partner_user? @relation(fields: [partner_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product         product       @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([partner_id], map: "idx_product_assignment_partner")
+  @@index([product_id], map: "idx_product_assignment_product")
+  @@index([partner_user_id], map: "idx_product_assignment_user")
+  @@schema("apim")
+}
+
+model product_step {
+  product_id        String         @db.Uuid
+  api_id            String         @db.Uuid
+  position          Int
+  step_note         String?        @db.VarChar(500)
+  depends_on_api_id String?        @db.Uuid
+  api_definition    api_definition @relation(fields: [api_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product           product        @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([product_id, api_id])
+  @@index([api_id], map: "idx_product_step_api")
+  @@schema("apim")
+}
+
+model security_key {
+  id          String    @id @db.Uuid
+  partner_id  String    @db.Uuid
+  environment String    @db.VarChar(20)
+  key_hash    String    @unique @db.VarChar(64)
+  masked_key  String    @db.VarChar(40)
+  status      String    @db.VarChar(20)
+  created_at  DateTime  @db.Timestamptz(6)
+  created_by  String    @db.VarChar(120)
+  expires_at  DateTime? @db.Timestamptz(6)
+  ended_at    DateTime? @db.Timestamptz(6)
+  partner     partner   @relation(fields: [partner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status, expires_at], map: "ix_security_key_expiry")
+  @@index([partner_id, environment, status], map: "ix_security_key_partner_env")
+  @@schema("apim")
+}
+
+model usage_event {
+  id          BigInt   @id @default(autoincrement())
+  occurred_at DateTime @db.Timestamptz(6)
+  api_id      String?  @db.Uuid
+  environment String?  @db.VarChar(20)
+  client_id   String?  @db.VarChar(64)
+  status_code Int
+  latency_ms  Int
+
+  @@index([occurred_at], map: "ix_usage_event_time")
+  @@schema("apim")
+}

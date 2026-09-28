@@ -4,7 +4,7 @@ PostgreSQL schema for the control plane (the Management Portal and Developer Por
 The gateways keep their own runtime configuration in etcd; this database is the system of record
 that the backend pushes to them.
 
-- **Implemented** tables come from `backend/src/main/resources/db/migration/V1__baseline.sql`,
+- **Implemented** tables come from `backend-java/src/main/resources/db/migration/V1__baseline.sql`,
   `V2__api_documentation.sql`, `V3__partner_user.sql`, `V4__organization_credentials.sql` and
   `V5__platform_user_and_otp.sql` and `V6__error_event.sql`.
 - **Planned** tables cover the BRD modules not yet built (Products, access mapping, domains, portal pages).

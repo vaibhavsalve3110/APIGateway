@@ -5,7 +5,7 @@ Management Portal, Developer Portal and gateway configuration for the platform s
 
 | Folder | What it is |
 |---|---|
-| `backend/` | Spring Boot 4.1 (Java 21) control plane — APIs, partners, security keys, usage, audit |
+| `backend-java/` | Spring Boot 4.1 (Java 21) control plane — APIs, partners, security keys, usage, audit |
 | `frontend/apps/management-portal` | Internal portal for Admin / Editor users (React 19, TypeScript, Vite) |
 | `frontend/apps/developer-portal` | Partner-facing portal |
 | `frontend/packages/ui` | Shared design tokens, components, API client and sign-in |
@@ -99,8 +99,8 @@ Data persists across restarts. Tables live in schema `apim` of database `apigw`.
    ```sql
    ALTER ROLE apigw WITH PASSWORD 'your-password';
    ```
-3. Copy `backend/config.example/application-local.yml` to `backend/config/application-local.yml` (git-ignored) and put the same
-   password in it, or set `DB_PASSWORD` instead. Spring reads `backend/config/` after the packaged settings, so that copy wins.
+3. Copy `backend-java/config.example/application-local.yml` to `backend-java/config/application-local.yml` (git-ignored) and put the same
+   password in it, or set `DB_PASSWORD` instead. Spring reads `backend-java/config/` after the packaged settings, so that copy wins.
 4. Start the backend. Flyway creates every table in `apim` (history in `apim.flyway_schema_history`), and the demo seed runs
    once, into the empty schema:
    ```bash
