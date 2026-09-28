@@ -7,7 +7,12 @@ COPY src ./src
 RUN mvn -B -q -DskipTests package
 
 FROM eclipse-temurin:21-jre
-RUN useradd --system --uid 10001 apigw
+# curl is not in the base image and the compose health check needs it; backend-node waits on that
+# check before it starts, so without curl the whole stack stalls.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --system --uid 10001 apigw
 WORKDIR /app
 COPY --from=build /src/target/platform-backend-*.jar app.jar
 USER apigw

@@ -9,6 +9,33 @@ in order, and are recorded in `apim.flyway_schema_history`. The one-time Postgre
 
 ## 2026-09-28
 
+### The whole platform in Docker, behind one nginx with TLS
+
+Not yet run end to end: Docker Desktop would not start on the development machine, so the compose
+file and the nginx configuration are written and reviewed but unverified. Treat the first
+`--profile app` run as a shakedown.
+
+- **`infra/nginx/make-certs.sh`** creates a local certificate authority and one certificate covering
+  `apigw.localhost`, `admin.`, `developer.`, `api.`, `sandbox-api.` and `127.0.0.1`. Output goes to
+  `infra/docker/certs/`, which is git-ignored — it holds a private key that can sign any name, so
+  trust the CA while you need it and delete it afterwards. Handles two Windows quirks: a machine-wide
+  `OPENSSL_CONF` left behind by PostgreSQL's ODBC driver, and Git Bash rewriting the `/C=IN/...`
+  subject into a filesystem path.
+- **One nginx terminates TLS** and routes by hostname; it is the only service publishing a port.
+  Plain HTTP is redirected, and an unknown name gets a closed connection rather than a portal.
+- **A service per container**: `backend-java`, `backend-node`, `management-portal`,
+  `developer-portal`, `nginx`, alongside the existing PostgreSQL, Valkey, etcd, two APISIX
+  deployments, Keycloak and the WireMock stand-ins.
+- **nginx is the migration switch.** `/api/admin/usage/*` and `/api/admin/audit` already go to the
+  Node service; everything else goes to Java. Moving an endpoint between backends is one line here,
+  with no change to either portal.
+- `AUTH_JWT_SECRET` is now **required** for the app profile and shared by both control planes — that
+  is what lets one session work against either.
+- `backend-node` waits for `backend-java` to report healthy, because Flyway runs there and owns the
+  schema. The Java image gained `curl` so that health check works.
+- Portals build from the repository root (npm workspaces share `packages/ui`) and are served by nginx
+  with an SPA fallback, so refreshing a deep link no longer 404s.
+
 ### Backend migration to Node begins — `backend/` is now `backend-java/`
 
 Work happens on the `node-migration` branch; `main` is untouched until the port is proven.

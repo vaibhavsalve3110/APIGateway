@@ -1,0 +1,9 @@
+# The portal images build from the repository root, so keep everything irrelevant out of the context.
+**/node_modules
+**/dist
+backend-java/target
+backend-java/config
+backend-node/.env
+infra/docker/certs
+.git
+*.log

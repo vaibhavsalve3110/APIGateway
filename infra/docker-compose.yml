@@ -1,7 +1,16 @@
 # Local stack for the API Gateway platform.
 #
 #   docker compose up -d                 # infrastructure only; run the backend + portals on the host
-#   docker compose --profile app up -d   # also build and run the backend in a container
+#   docker compose --profile app up -d --build   # the whole platform in containers behind nginx/TLS
+#
+# Before the first --profile app run, create the development certificates:
+#   ../nginx/make-certs.sh
+#
+# Then everything is reached over https, by name:
+#   https://admin.apigw.localhost         Management Portal
+#   https://developer.apigw.localhost     Developer Portal
+#   https://sandbox-api.apigw.localhost   partner traffic -> APISIX sandbox
+#   https://api.apigw.localhost           partner traffic -> APISIX production
 #
 # Works with Docker Engine (Linux / WSL2), Rancher Desktop or Podman. Docker Desktop needs a paid
 # subscription in organisations above 250 staff or $10M revenue.
@@ -63,7 +72,7 @@ services:
       APISIX_ETCD_PREFIX: /apisix-sandbox
     volumes: ["./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro"]
     ports:
-      - "9080:9080"   # partner traffic — sandbox-api.apigw.localhost
+      - "9080:9080"   # partner traffic — also fronted by nginx as sandbox-api.apigw.localhost
       - "9180:9180"   # Admin API (backend only)
 
   apisix-production:
@@ -73,7 +82,7 @@ services:
       APISIX_ETCD_PREFIX: /apisix-production
     volumes: ["./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro"]
     ports:
-      - "9081:9080"   # partner traffic — api.apigw.localhost
+      - "9081:9080"   # partner traffic — also fronted by nginx as api.apigw.localhost
       - "9181:9180"   # Admin API (backend only)
 
   keycloak:
@@ -104,9 +113,14 @@ services:
     volumes: ["./mocks/production:/home/wiremock"]
     ports: ["8092:8080"]
 
-  backend:
+  # ------------------------------------------------------------------ the platform itself
+  # Everything below runs only under --profile app.
+
+  # Java control plane. Owns the schema: Flyway runs here at startup, and backend-node reads the
+  # result, so this service must be healthy before the Node one is useful.
+  backend-java:
     profiles: ["app"]
-    build: ../backend
+    build: ../backend-java
     restart: unless-stopped
     depends_on:
       postgres:
@@ -115,16 +129,87 @@ services:
       SPRING_PROFILES_ACTIVE: demo
       DB_URL: jdbc:postgresql://postgres:5432/apigw
       DB_PASSWORD: ${DB_PASSWORD:-apigw}
-      KEYCLOAK_ISSUER: http://localhost:8180/realms/apigw
-      KEYCLOAK_JWKS_URI: http://keycloak:8080/realms/apigw/protocol/openid-connect/certs
+      # Both control planes verify the same signature, so one portal session works against either.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env — 32+ characters}
+      CRYPTO_MASTER_KEY: ${CRYPTO_MASTER_KEY:-}
       APISIX_SANDBOX_ADMIN_URL: http://apisix-sandbox:9180
       APISIX_SANDBOX_ADMIN_KEY: ${APISIX_SANDBOX_ADMIN_KEY:-change-me-sandbox-admin-key}
       APISIX_PRODUCTION_ADMIN_URL: http://apisix-production:9180
       APISIX_PRODUCTION_ADMIN_KEY: ${APISIX_PRODUCTION_ADMIN_KEY:-change-me-production-admin-key}
       GATEWAY_REDIS_HOST: valkey
-      USAGE_SINK_URL: http://backend:8088/internal/usage/batch
+      USAGE_SINK_URL: http://backend-java:8088/internal/usage/batch
       USAGE_INGEST_TOKEN: ${USAGE_INGEST_TOKEN:-change-me-ingest-token}
-    ports: ["8088:8088"]
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@apigw.local}
+      PUBLIC_SANDBOX_URL: https://sandbox-api.apigw.localhost
+    expose: ["8088"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8088/actuator/health"]
+      interval: 15s
+      timeout: 3s
+      start_period: 90s
+      retries: 10
+
+  # NestJS control plane. Reads the same database; the schema is migrated by backend-java, never by
+  # Prisma, so this service waits for that one to be healthy before it starts.
+  backend-node:
+    profiles: ["app"]
+    build:
+      context: ../backend-node
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      backend-java:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://apigw:${DB_PASSWORD:-apigw}@postgres:5432/apigw?schema=apim
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env — 32+ characters}
+      PORT: 8089
+    expose: ["8089"]
+
+  management-portal:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        APP: management-portal
+    restart: unless-stopped
+    expose: ["80"]
+
+  developer-portal:
+    profiles: ["app"]
+    build:
+      context: ..
+      dockerfile: frontend/Dockerfile
+      args:
+        APP: developer-portal
+    restart: unless-stopped
+    expose: ["80"]
+
+  # The only service publishing a port to the outside world. Terminates TLS with the self-signed
+  # certificate from infra/nginx/make-certs.sh and routes by hostname.
+  nginx:
+    profiles: ["app"]
+    image: nginx:1.29-alpine
+    restart: unless-stopped
+    depends_on: [backend-java, backend-node, management-portal, developer-portal]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/proxy.conf:/etc/nginx/proxy.conf:ro
+      - ./docker/certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
 volumes:
   pgdata:
