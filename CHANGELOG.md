@@ -9,6 +9,28 @@ in order, and are recorded in `apim.flyway_schema_history`. The one-time Postgre
 
 ## 2026-09-28
 
+### Security keys: Partner Admin only, confirmed before, announced after
+
+Rotating a key breaks every live integration that has not switched over, so it is now a deliberate act with
+witnesses.
+
+- **Only a Partner Admin may create or rotate a key in the Developer Portal.** Anyone else gets
+  `403 NOT_PARTNER_ADMIN` and is told who can do it. `/api/partner/me` now returns `role` and
+  `canGenerateKeys`, so the portal disables the button and explains why rather than failing the click.
+  APIM Admins can still rotate on a partner's behalf from the Management Portal.
+- **Both portals ask first.** The dialog states that the current key keeps working for the configured grace
+  period (20 minutes) and then stops, and that the rotation will be e-mailed and notified. Cancel does
+  nothing at all — no key is created.
+- **Three notices go out once the key is committed**, whoever rotated it:
+  1. the new key, to the organization's Partner Admins (`Your new <env> security key`);
+  2. a change notice to *every* active portal user of that organization, Partner Admins included, which
+     does **not** contain the key and says to contact the APIM Admin team immediately if it was not them;
+  3. an alert to every active APIM Admin naming the partner, the environment and who did it.
+- Notices are sent after the transaction commits, so a rotation that failed never announces itself, and a
+  mail failure never rolls back a key that has already been issued (it lands in the error log instead).
+- New setting `apigw.keys.email-key-to-admin` (default `true`). Set it to `false` to send the change notice
+  without the key itself, if your policy is that a live credential must never travel by e-mail.
+
 ### Developer Portal: the partner's own dashboard
 
 - New landing page for partners: calls, errors, success rate and average latency over the last hour, 24 hours,

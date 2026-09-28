@@ -3,6 +3,7 @@ package com.apigw.platform.portal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -36,6 +37,9 @@ import com.apigw.platform.keys.SecurityKeyService;
 import com.apigw.platform.partners.AccessTier;
 import com.apigw.platform.partners.Partner;
 import com.apigw.platform.partners.PartnerService;
+import com.apigw.platform.partnerusers.PartnerUser;
+import com.apigw.platform.partnerusers.PartnerUserRepository;
+import com.apigw.platform.partnerusers.PartnerUserRole;
 import com.apigw.platform.partners.RecordStatus;
 import com.apigw.platform.security.CurrentActor;
 import com.apigw.platform.usage.UsageService;
@@ -54,20 +58,22 @@ class PartnerPortalController {
     private final ApiService apis;
     private final UsageService usage;
     private final TryItService tryIt;
+    private final PartnerUserRepository partnerUsers;
     private final ApigwProperties props;
 
     PartnerPortalController(PartnerService partners, SecurityKeyService keys, ApiService apis, UsageService usage,
-                            TryItService tryIt, ApigwProperties props) {
+                            TryItService tryIt, PartnerUserRepository partnerUsers, ApigwProperties props) {
         this.partners = partners;
         this.keys = keys;
         this.apis = apis;
         this.usage = usage;
         this.tryIt = tryIt;
+        this.partnerUsers = partnerUsers;
         this.props = props;
     }
 
     record Me(String code, String name, AccessTier accessTier, RecordStatus status, String clientIdSandbox,
-              String clientIdProduction) {
+              String clientIdProduction, PartnerUserRole role, boolean canGenerateKeys) {
     }
 
     record CatalogueApi(UUID id, String name, String category, String httpMethod, String proxyPath, String description,
@@ -77,8 +83,10 @@ class PartnerPortalController {
     @GetMapping("/me")
     Me me() {
         Partner p = current();
+        PartnerUserRole role = signedInUser(p).map(PartnerUser::getRole).orElse(null);
         return new Me(p.getCode(), p.getName(), p.getAccessTier(), p.getStatus(), p.getClientIdSandbox(),
-                p.getAccessTier() == AccessTier.PRODUCTION ? p.getClientIdProduction() : null);
+                p.getAccessTier() == AccessTier.PRODUCTION ? p.getClientIdProduction() : null,
+                role, role == PartnerUserRole.PARTNER_ADMIN);
     }
 
     /**
@@ -136,11 +144,34 @@ class PartnerPortalController {
         return keys.list(current().getId());
     }
 
-    /** DP-05: self-service regeneration. The response is the only time the key is shown. */
+    /**
+     * DP-05: self-service regeneration, for Partner Admins only — a developer or viewer can read the
+     * documentation and test, but rotating a live credential is the account owner's decision.
+     * The response is the only time the key is shown in the portal.
+     */
     @PostMapping("/keys/{environment}")
     @ResponseStatus(HttpStatus.CREATED)
     GeneratedKey generate(@PathVariable Env environment) {
-        return keys.generate(current().getId(), environment, CurrentActor.get());
+        Partner partner = current();
+        requirePartnerAdmin(partner);
+        return keys.generate(partner.getId(), environment, CurrentActor.get());
+    }
+
+    /** The signed-in user's own record, looked up by the address in their token. */
+    private Optional<PartnerUser> signedInUser(Partner partner) {
+        return partnerUsers.findByEmail(CurrentActor.get().username().toLowerCase(java.util.Locale.ROOT))
+                .filter(u -> u.getPartnerId().equals(partner.getId()));
+    }
+
+    private void requirePartnerAdmin(Partner partner) {
+        boolean isAdmin = signedInUser(partner)
+                .map(u -> u.getRole() == PartnerUserRole.PARTNER_ADMIN && u.getStatus() == RecordStatus.ACTIVE)
+                .orElse(false);
+        if (!isAdmin) {
+            throw ApiException.forbidden("NOT_PARTNER_ADMIN",
+                    "Only a Partner Admin of " + partner.getName() + " can generate security keys. "
+                            + "Ask your Partner Admin, or your APIM Admin, to rotate the key.");
+        }
     }
 
     @GetMapping("/usage")

@@ -49,7 +49,13 @@ public record ApigwProperties(Keys keys, Apis apis, Usage usage, Security securi
         }
     }
 
-    public record Keys(Duration overlapWindow) {
+    /**
+     * @param overlapWindow    how long the replaced key keeps working (BRD CP-SEC-04)
+     * @param emailKeyToAdmin  e-mail the new key to the organisation's Partner Admins. Convenient, but it
+     *                         puts a live credential in a mailbox; turn it off to send only the notice and
+     *                         leave the key to the one-time reveal in the portal.
+     */
+    public record Keys(Duration overlapWindow, boolean emailKeyToAdmin) {
     }
 
     public record Apis(Duration deleteCoolingPeriod) {

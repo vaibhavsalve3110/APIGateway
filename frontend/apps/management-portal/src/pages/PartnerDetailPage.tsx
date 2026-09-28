@@ -20,6 +20,7 @@ export function PartnerDetailPage() {
   const [confirmReissue, setConfirmReissue] = useState<"signature" | "salt" | null>(null);
   const [revealed, setRevealed] = useState<RevealedSalt | null>(null);
   const [editing, setEditing] = useState(false);
+  const [confirmKey, setConfirmKey] = useState<Env | null>(null);
 
   const partner = useQuery({ queryKey: ["partner", id], queryFn: () => api.get<PartnerView>(`/api/admin/partners/${id}`) });
   const portalUsers = useQuery({
@@ -39,7 +40,7 @@ export function PartnerDetailPage() {
 
   const generate = useMutation({
     mutationFn: (env: Env) => api.post<GeneratedKey>(`/api/admin/partners/${id}/keys/${env}`),
-    onSuccess: (g) => { setGenerated(g); refresh(); },
+    onSuccess: (g) => { setConfirmKey(null); setGenerated(g); refresh(); },
   });
   const revoke = useMutation({
     mutationFn: (k: KeyView) => api.post<KeyView>(`/api/admin/keys/${k.id}/revoke`),
@@ -115,10 +116,10 @@ export function PartnerDetailPage() {
         </div>
         <div className="card" style={{ width: 360, padding: "16px 18px" }}>
           <div className="card-title" style={{ marginBottom: 12 }}>Client IDs</div>
-          <EnvRow env="SANDBOX" clientId={p.clientIdSandbox} provisioned onGenerate={() => generate.mutate("SANDBOX")}
+          <EnvRow env="SANDBOX" clientId={p.clientIdSandbox} provisioned onGenerate={() => setConfirmKey("SANDBOX")}
             busy={generate.isPending} rotating={rotating.has("SANDBOX")} disabled={p.status !== "ACTIVE"} />
           <EnvRow env="PRODUCTION" clientId={p.clientIdProduction} provisioned={p.accessTier === "PRODUCTION"}
-            onGenerate={() => generate.mutate("PRODUCTION")} busy={generate.isPending} rotating={rotating.has("PRODUCTION")}
+            onGenerate={() => setConfirmKey("PRODUCTION")} busy={generate.isPending} rotating={rotating.has("PRODUCTION")}
             disabled={p.status !== "ACTIVE"} />
           <p className="muted" style={{ fontSize: 11.5, marginTop: 10 }}>Rate limits are counted per Client ID, so a partner's two keys share one allowance.</p>
         </div>
@@ -199,6 +200,28 @@ export function PartnerDetailPage() {
       </div>
 
       {generated ? <GeneratedKeyModal generated={generated} onClose={() => setGenerated(null)} /> : null}
+      {confirmKey ? (
+        <Modal
+          title={`Create a new ${confirmKey.toLowerCase()} key for ${p.name}?`}
+          onClose={() => setConfirmKey(null)}
+          footer={<>
+            <button className="btn" onClick={() => setConfirmKey(null)}>Cancel</button>
+            <button className="btn btn-primary" disabled={generate.isPending} onClick={() => generate.mutate(confirmKey)}>
+              {generate.isPending ? "Creating…" : "Create key"}
+            </button>
+          </>}
+        >
+          <ErrorBanner error={generate.error} />
+          <p className="muted" style={{ lineHeight: 1.6 }}>
+            The partner's current {confirmKey.toLowerCase()} key keeps working for 20 minutes after this, then stops.
+            Anything they have not switched over by then starts failing, so agree the timing with them first.
+          </p>
+          <div className="banner banner-warn" style={{ fontSize: 12.5 }}>
+            {p.name}'s Partner Admins are e-mailed the new key, all their portal users are told it changed, and the
+            APIM Admin team is notified.
+          </div>
+        </Modal>
+      ) : null}
       {issued ? <IssuedCredentialsModal issued={issued} onClose={() => setIssued(null)} /> : null}
       {editing ? <EditOrganizationModal partner={p} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); refresh(); }} /> : null}
       {revealed ? (

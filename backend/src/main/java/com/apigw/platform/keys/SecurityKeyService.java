@@ -51,13 +51,16 @@ public class SecurityKeyService {
     private final AuditService audit;
     private final Clock clock;
     private final Duration overlap;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
     public SecurityKeyService(SecurityKeyRepository keys, PartnerService partners, GatewayClient gateway,
-                              AuditService audit, Clock clock, ApigwProperties props) {
+                              AuditService audit, org.springframework.context.ApplicationEventPublisher events,
+                              Clock clock, ApigwProperties props) {
         this.keys = keys;
         this.partners = partners;
         this.gateway = gateway;
         this.audit = audit;
+        this.events = events;
         this.clock = clock;
         this.overlap = props.keys().overlapWindow();
     }
@@ -125,6 +128,10 @@ public class SecurityKeyService {
         audit.record(actor, "GENERATE", AUDIT_TYPE, key.getId(),
                 env + " key " + material.masked() + " generated for " + partner.getCode()
                         + (previousExpiresAt == null ? "" : "; previous key stays valid until " + previousExpiresAt));
+        // Notifications go out after this transaction commits — see KeyNotificationListener.
+        events.publishEvent(new KeyGeneratedEvent(partnerId, partner.getCode(), partner.getName(), env,
+                material.masked(), material.plaintext(), clientId, previousExpiresAt, actor.username(),
+                actor.hasRole("PARTNER")));
         return new GeneratedKey(KeyView.of(key, now), material.plaintext(), clientId, previousExpiresAt);
     }
 

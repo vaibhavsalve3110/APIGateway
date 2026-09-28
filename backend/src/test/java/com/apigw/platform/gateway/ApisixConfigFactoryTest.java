@@ -74,7 +74,7 @@ class ApisixConfigFactoryTest {
     @Test
     @SuppressWarnings("unchecked")
     void usageLoggerShipsMetadataWithTheIngestToken() {
-        ApigwProperties props = new ApigwProperties(new ApigwProperties.Keys(Duration.ofMinutes(20)),
+        ApigwProperties props = new ApigwProperties(new ApigwProperties.Keys(Duration.ofMinutes(20), true),
                 new ApigwProperties.Apis(Duration.ofDays(7)), new ApigwProperties.Usage(Duration.ofDays(30), "t0k"),
                 new ApigwProperties.Security(false), gw,
                 new ApigwProperties.TryIt("SIMULATE", "http://sbx:9080", "http://sandbox-api:9080", Duration.ofSeconds(5)),

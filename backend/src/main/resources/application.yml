@@ -46,6 +46,9 @@ apigw:
   keys:
     # BRD v1.3, CP-SEC-04: the previous key stays valid for 20 minutes after a new key is generated.
     overlap-window: PT20M
+    # Sends the new key itself to the Partner Admins. Set false to send only the change notice and keep
+    # the key to the one-time reveal in the portal.
+    email-key-to-admin: ${EMAIL_KEY_TO_ADMIN:true}
   apis:
     # BRD CP-RPT-05: an API must stay Disabled for longer than this before it can be deleted.
     delete-cooling-period: P7D

@@ -29,7 +29,7 @@ class KeyLifecycleTest extends IntegrationTest {
 
     @Test
     void keyIsShownOnceAndOnlyItsHashIsStored() throws Exception {
-        String partner = createPartner("Hash Check Fintech");
+        String partner = createPartnerWithAdmin("Hash Check Fintech");
         String code = JsonPath.read(partner, "$.code");
         String clientId = JsonPath.read(partner, "$.clientIdSandbox");
 
@@ -58,7 +58,7 @@ class KeyLifecycleTest extends IntegrationTest {
 
     @Test
     void newKeyStartsA20MinuteOverlapThenThePreviousKeyExpires() throws Exception {
-        String partner = createPartner("Overlap Window Payments");
+        String partner = createPartnerWithAdmin("Overlap Window Payments");
         String code = JsonPath.read(partner, "$.code");
         String clientId = JsonPath.read(partner, "$.clientIdSandbox");
 
@@ -98,7 +98,7 @@ class KeyLifecycleTest extends IntegrationTest {
 
     @Test
     void adminCanRevokeTheNewKeyOnlyInsideTheWindow() throws Exception {
-        String partner = createPartner("Revoke Window Securities");
+        String partner = createPartnerWithAdmin("Revoke Window Securities");
         String code = JsonPath.read(partner, "$.code");
 
         UUID first = generate(code);
@@ -122,7 +122,7 @@ class KeyLifecycleTest extends IntegrationTest {
 
     @Test
     void productionKeysNeedTheProductionTierAndDieWhenItIsWithdrawn() throws Exception {
-        String partner = createPartner("Tier Rules Capital");
+        String partner = createPartnerWithAdmin("Tier Rules Capital");
         String code = JsonPath.read(partner, "$.code");
         String partnerId = JsonPath.read(partner, "$.id");
 
@@ -152,8 +152,8 @@ class KeyLifecycleTest extends IntegrationTest {
 
     @Test
     void partnerUsersOnlySeeTheirOwnAccount() throws Exception {
-        String a = createPartner("Scope Alpha");
-        String b = createPartner("Scope Beta");
+        String a = createPartnerWithAdmin("Scope Alpha");
+        String b = createPartnerWithAdmin("Scope Beta");
         generate(JsonPath.read(a, "$.code"));
 
         mvc.perform(get("/api/partner/keys").with(partnerUser(JsonPath.read(b, "$.code"))))

@@ -37,6 +37,7 @@ export function KeysPage() {
   const expiring = all.filter((k) => k.status === "EXPIRING");
   const hasLive = (env: Env) => all.some((k) => k.environment === env && (k.status === "ACTIVE" || k.status === "EXPIRING"));
   const envs: Env[] = me.data?.accessTier === "PRODUCTION" ? ["SANDBOX", "PRODUCTION"] : ["SANDBOX"];
+  const canGenerate = me.data?.canGenerateKeys ?? false;
 
   return (
     <div className="page" style={{ padding: "26px 30px 34px" }}>
@@ -45,6 +46,15 @@ export function KeysPage() {
         subtitle="Your key identifies your organisation at the gateway on every call. It is shown once, when you create it — store it in your secret manager straight away."
       />
       <ErrorBanner error={keys.error ?? me.error} />
+
+      {me.data && !canGenerate ? (
+        <div className="banner banner-info">
+          <span>
+            Creating and rotating keys is limited to your organisation's <strong>Partner Admins</strong>. You can see
+            which keys exist and when they expire; ask a Partner Admin, or the APIM Admin team, to rotate one.
+          </span>
+        </div>
+      ) : null}
 
       {expiring.map((k) => (
         <div key={k.id} className="banner banner-info">
@@ -64,7 +74,9 @@ export function KeysPage() {
               <p className="muted mono" style={{ fontSize: 11.5, margin: "4px 0 12px" }}>
                 Client ID {env === "SANDBOX" ? me.data?.clientIdSandbox : me.data?.clientIdProduction}
               </p>
-              <button className="btn btn-primary" disabled={rotating || generate.isPending} onClick={() => setConfirm(env)}>
+              <button className="btn btn-primary" disabled={!canGenerate || rotating || generate.isPending}
+                title={canGenerate ? undefined : "Only a Partner Admin of your organisation can create keys"}
+                onClick={() => setConfirm(env)}>
                 {hasLive(env) ? "Create a new key" : "Create my first key"}
               </button>
             </div>
@@ -108,6 +120,10 @@ export function KeysPage() {
               ? "Your current key will keep working for 20 minutes after the new one is created, then it stops. Make sure every system that calls the gateway can be switched to the new key within that time."
               : "The key is shown once, on the next screen. Have your secret manager ready."}
           </p>
+          <div className="banner banner-warn" style={{ fontSize: 12.5 }}>
+            Your organisation's Partner Admins are e-mailed the new key, everyone with a portal account here is told
+            it changed, and the APIM Admin team is notified — so an unexpected rotation is noticed quickly.
+          </div>
         </Modal>
       ) : null}
       {generated ? <GeneratedKeyModal generated={generated} onClose={() => setGenerated(null)} /> : null}

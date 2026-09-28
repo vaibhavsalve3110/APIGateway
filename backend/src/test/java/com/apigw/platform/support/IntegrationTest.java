@@ -48,10 +48,20 @@ public abstract class IntegrationTest {
                 .authorities(new SimpleGrantedAuthority("ROLE_EDITOR"));
     }
 
-    protected static RequestPostProcessor partnerUser(String partnerCode) {
-        return jwt().jwt(j -> j.claim("preferred_username", "dev@" + partnerCode)
+    /**
+     * A named partner user, for rules that depend on which person is signed in (a Partner Admin, say).
+     * The subject carries the address as well as {@code preferred_username}, because that is what the token
+     * this platform issues does, and what {@code Authentication#getName()} reads.
+     */
+    protected static RequestPostProcessor partnerUserNamed(String partnerCode, String email) {
+        return jwt().jwt(j -> j.subject(email)
+                        .claim("preferred_username", email)
                         .claim("groups", List.of("/partners/" + partnerCode)))
                 .authorities(new SimpleGrantedAuthority("ROLE_PARTNER"));
+    }
+
+    protected static RequestPostProcessor partnerUser(String partnerCode) {
+        return partnerUserNamed(partnerCode, "dev@" + partnerCode);
     }
 
     protected String createGroup(String name) throws Exception {
@@ -72,6 +82,26 @@ public abstract class IntegrationTest {
         return mvc.perform(get("/api/admin/partners/{id}", id).with(admin()))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
+    }
+
+    /**
+     * Registers an organization and gives it a Partner Admin at the address {@link #partnerUser} signs in as,
+     * so the default partner token can exercise everything a partner can — including key rotation, which is
+     * restricted to Partner Admins.
+     */
+    protected String createPartnerWithAdmin(String name) throws Exception {
+        String partner = createPartner(name);
+        // Typed locals on purpose: inline, JsonPath.read infers Object[] against a varargs parameter and
+        // blows up at runtime with a ClassCastException.
+        String partnerId = JsonPath.read(partner, "$.id");
+        String partnerCode = JsonPath.read(partner, "$.code");
+        mvc.perform(post("/api/admin/partners/{id}/users", partnerId).with(admin())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Test Partner Admin","email":"dev@%s","role":"PARTNER_ADMIN"}
+                                """.formatted(partnerCode)))
+                .andExpect(status().isOk());
+        return partner;
     }
 
     /** The registration response, including the organization credentials issued once. */

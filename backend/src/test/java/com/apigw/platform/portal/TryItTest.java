@@ -24,7 +24,7 @@ class TryItTest extends IntegrationTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        String partner = createPartner("Try It Payments");
+        String partner = createPartnerWithAdmin("Try It Payments");
         partnerCode = JsonPath.read(partner, "$.code");
         partnerId = JsonPath.read(partner, "$.id");
         String api = mvc.perform(post("/api/admin/apis").with(admin()).contentType(MediaType.APPLICATION_JSON).content("""
@@ -88,7 +88,7 @@ class TryItTest extends IntegrationTest {
                 .andExpect(jsonPath("$.code").value("INVALID_KEY"));
 
         // Another partner's valid key is not accepted either.
-        String other = createPartner("Try It Other");
+        String other = createPartnerWithAdmin("Try It Other");
         String otherKey = JsonPath.read(mvc.perform(post("/api/partner/keys/SANDBOX").with(partnerUser(JsonPath.read(other, "$.code"))))
                 .andReturn().getResponse().getContentAsString(), "$.plaintext");
         mvc.perform(post("/api/partner/apis/{id}/try", apiId).with(partnerUser(partnerCode)).contentType(MediaType.APPLICATION_JSON)
