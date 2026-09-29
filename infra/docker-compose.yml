@@ -30,7 +30,15 @@ x-apisix: &apisix
     - "host.docker.internal:host-gateway"   # lets the gateways ship usage logs to a backend running on the host
 
 services:
+  # Disposable PostgreSQL for a machine that has none. It does NOT start by default: the stack points
+  # at whatever DB_HOST names, which is the developer machine's own PostgreSQL unless you change it.
+  #
+  #   docker compose --profile app --profile bundled-db up -d     (use this container instead)
+  #
+  # and in infra/.env set DB_HOST=postgres, DB_PORT=5432, DB_SCHEMA=public plus a DB_PASSWORD of your
+  # choosing — the bundled server is created with whatever that says.
   postgres:
+    profiles: ["bundled-db"]
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
@@ -123,13 +131,20 @@ services:
     profiles: ["app"]
     build: ../backend-java
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
+    # host.docker.internal is the developer machine as seen from inside a container. Docker Desktop
+    # provides it; the mapping below is what makes it work on plain Docker Engine too.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       SPRING_PROFILES_ACTIVE: demo
-      DB_URL: jdbc:postgresql://postgres:5432/apigw
-      DB_PASSWORD: ${DB_PASSWORD:-apigw}
+      # Schema is named explicitly rather than by activating the 'local' profile, which would also
+      # switch on header-based dev authentication and switch off gateway sync — neither wanted here.
+      DB_URL: jdbc:postgresql://${DB_HOST:-host.docker.internal}:${DB_PORT:-5432}/apigw?currentSchema=${DB_SCHEMA:-apim}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in infra/.env to the password of the database DB_HOST points at}
+      SPRING_FLYWAY_SCHEMAS: ${DB_SCHEMA:-apim}
+      SPRING_FLYWAY_DEFAULT_SCHEMA: ${DB_SCHEMA:-apim}
+      SPRING_FLYWAY_CREATE_SCHEMAS: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA: ${DB_SCHEMA:-apim}
       # Both control planes verify the same signature, so one portal session works against either.
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env — 32+ characters}
       CRYPTO_MASTER_KEY: ${CRYPTO_MASTER_KEY:-}
@@ -161,13 +176,13 @@ services:
       context: ../backend-node
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       backend-java:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://apigw:${DB_PASSWORD:-apigw}@postgres:5432/apigw?schema=${DB_SCHEMA:-public}
+      DATABASE_URL: postgresql://apigw:${DB_PASSWORD:?set DB_PASSWORD in infra/.env}@${DB_HOST:-host.docker.internal}:${DB_PORT:-5432}/apigw?schema=${DB_SCHEMA:-apim}
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env — 32+ characters}
       PORT: 8089
     expose: ["8089"]

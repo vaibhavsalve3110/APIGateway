@@ -7,6 +7,31 @@ Database changes are Flyway migrations in `backend/src/main/resources/db/migrati
 in order, and are recorded in `apim.flyway_schema_history`. The one-time PostgreSQL setup script is
 `infra/postgres/local-setup.sql`.
 
+## 2026-09-29
+
+### The container stack now uses your own PostgreSQL, not a database of its own
+
+The bundled PostgreSQL container was a second, empty database with its own seeded demo data, which
+meant the containerised portals showed different records from the ones you had been working on.
+
+- `DB_HOST`, `DB_PORT` and `DB_SCHEMA` in `infra/.env` decide which database the stack talks to. The
+  defaults are now `host.docker.internal:5432` and schema `apim` — the developer machine's own
+  server. Both control planes read the same three settings, so they cannot drift apart.
+- The bundled `postgres` service moved behind its own `bundled-db` profile and no longer starts:
+  `docker compose --profile app --profile bundled-db up -d`, with `DB_HOST=postgres` and
+  `DB_SCHEMA=public`, brings it back for a machine that has no PostgreSQL.
+- The schema is named through `SPRING_FLYWAY_SCHEMAS` and Hibernate's `default_schema` rather than by
+  activating the `local` profile, which would also switch on header-based dev authentication and
+  switch off gateway sync — neither of which belongs in a container.
+- **`CRYPTO_MASTER_KEY` is deliberately empty.** The IPV salts already in that database were encrypted
+  with the built-in development key, because `backend-java` sets no master key; a different key
+  cannot decrypt them. Setting a real one means re-encrypting the existing salts first. Until then
+  those secrets are protected only by a key that is published in the source.
+- Verified on the real database: Flyway validated all 7 migrations and changed nothing, the demo
+  seeder skipped a populated schema, and both control planes serve the real partners and users.
+- Recreating a backend container gives nginx a new IP that it does not re-resolve, so a `502` after
+  `up -d --force-recreate` is stale DNS, not a broken backend. `docker compose restart nginx` clears it.
+
 ## 2026-09-28
 
 ### The whole platform in Docker, behind one nginx with TLS
