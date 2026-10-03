@@ -7,6 +7,34 @@ Database changes are Flyway migrations in `backend/src/main/resources/db/migrati
 in order, and are recorded in `apim.flyway_schema_history`. The one-time PostgreSQL setup script is
 `infra/postgres/local-setup.sql`.
 
+## 2026-10-03
+
+### The Java-to-Node migration starts in earnest
+
+The port now has a shared foundation and a way to prove each step, rather than one endpoint group
+done by hand.
+
+- **Every error leaves the Node service as the same RFC 9457 problem document Java produces** —
+  `detail`, `instance`, `status`, `title`, `code`, plus `fields` on a validation failure, as
+  `application/problem+json`. This was wrong before: the ported endpoints returned Nest's
+  `{statusCode, message}`, which the portals cannot read, so a user would have seen "Request failed"
+  instead of the real reason.
+- **`backend-node/tools/parity.js` compares an endpoint between the two services** field by field on
+  the same database, and prints every differing path. A route is only moved once it matches.
+- **Timestamps now match to the microsecond.** PostgreSQL stores `timestamptz` to microseconds but a
+  JavaScript `Date` holds milliseconds, so reading one through a `Date` silently truncated every
+  timestamp. They are rendered as text in SQL and formatted the way `Instant.toString()` does —
+  which prints no fraction, three digits or six, never a fixed width. The parity harness found this.
+- **Shared services ported**: the error log (`error_event`, with the same `ERR-XXXXXXXX` references
+  and column trimming) and the audit log (`audit_event`).
+- **Routes ported and proven**: `GET /api/admin/apis`, `/apis/{id}`, `/partners`, `/partners/{id}`
+  and `/partner-groups`, alongside the usage and audit endpoints from before.
+- **nginx chooses the backend per method and path**, not per prefix. `/api/admin/apis` is a list on
+  `GET` and a create on `POST`, and only the read side is ported; sub-resources such as
+  `/partners/{id}/keys` stay on Java rather than being swallowed by a prefix match.
+- nginx also resolves upstreams at request time through Docker's DNS now, so rebuilding a backend
+  container no longer leaves it answering `502` from a cached address.
+
 ## 2026-09-29
 
 ### The container stack now uses your own PostgreSQL, not a database of its own

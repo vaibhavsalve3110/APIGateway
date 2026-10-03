@@ -3,6 +3,9 @@ import { AuthGuard } from '@nestjs/passport';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 import { Roles, RolesGuard } from '../auth/roles.guard';
+import { Prisma } from '@prisma/client';
+
+import { instantColumn, javaInstant } from '../common/time';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface AuditView {
@@ -32,7 +35,7 @@ export class AuditController {
     const rows = await this.prisma.$queryRaw<
       {
         id: bigint;
-        occurred_at: Date;
+        occurred_at: string;
         actor: string;
         actor_role: string | null;
         action: string;
@@ -41,14 +44,14 @@ export class AuditController {
         detail: string | null;
       }[]
     >`
-      SELECT id, occurred_at, actor, actor_role, action, object_type, object_id, detail
+      SELECT id, ${Prisma.raw(instantColumn('occurred_at', 'occurred_at'))}, actor, actor_role, action, object_type, object_id, detail
         FROM audit_event
        ORDER BY occurred_at DESC, id DESC
        LIMIT ${capped}`;
 
     return rows.map((r) => ({
       id: Number(r.id),
-      occurredAt: r.occurred_at.toISOString(),
+      occurredAt: javaInstant(r.occurred_at) as string,
       actor: r.actor,
       actorRole: r.actor_role,
       action: r.action,

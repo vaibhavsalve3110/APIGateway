@@ -1,5 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
+import { Prisma } from '@prisma/client';
+
+import { ApiException } from '../common/api-exception';
+import { instantColumn, javaInstant, javaInstantFromDate } from '../common/time';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   ApiUsage,
@@ -32,7 +36,7 @@ export class UsageService {
     const end = to ? new Date(to) : now;
     const start = from ? new Date(from) : new Date(end.getTime() - DEFAULT_WINDOW_MS);
     if (!(start.getTime() < end.getTime())) {
-      throw new BadRequestException({ code: 'INVALID_RANGE', message: "'from' must be before 'to'" });
+      throw ApiException.badRequest('INVALID_RANGE', "'from' must be before 'to'");
     }
     const earliest = new Date(now.getTime() - RETENTION_MS);
     return { start: start < earliest ? earliest : start, end };
@@ -64,8 +68,8 @@ export class UsageService {
     }));
 
     return {
-      from: start.toISOString(),
-      to: end.toISOString(),
+      from: javaInstantFromDate(start) as string,
+      to: javaInstantFromDate(end) as string,
       totalSuccess: apis.reduce((sum, a) => sum + a.success, 0),
       totalFailed: apis.reduce((sum, a) => sum + a.failed, 0),
       apis,
@@ -87,7 +91,7 @@ export class UsageService {
     const rows = await this.prisma.$queryRaw<
       {
         id: bigint;
-        occurred_at: Date;
+        occurred_at: string;
         api_id: string | null;
         api_name: string | null;
         http_method: string | null;
@@ -100,7 +104,7 @@ export class UsageService {
         latency_ms: number;
       }[]
     >`
-      SELECT u.id, u.occurred_at, u.api_id, a.name AS api_name, a.http_method, a.proxy_path,
+      SELECT u.id, ${Prisma.raw(instantColumn('u.occurred_at', 'occurred_at'))}, u.api_id, a.name AS api_name, a.http_method, a.proxy_path,
              u.environment, u.client_id, p.name AS partner_name, p.code AS partner_code,
              u.status_code, u.latency_ms
         FROM usage_event u
@@ -117,7 +121,7 @@ export class UsageService {
 
     return rows.map((r) => ({
       id: Number(r.id),
-      occurredAt: r.occurred_at.toISOString(),
+      occurredAt: javaInstant(r.occurred_at) as string,
       apiId: r.api_id,
       apiName: r.api_name,
       httpMethod: r.http_method,
