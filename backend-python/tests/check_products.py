@@ -20,8 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 from parity import _token, diff  # noqa: E402
 
-JAVA = "http://127.0.0.1:8088"
-PYTHON = "http://127.0.0.1:8090"
+JAVA = "http://127.0.0.1:18088"
+PYTHON = "http://127.0.0.1:18090"
 TOKEN = _token(["ADMIN"])
 
 

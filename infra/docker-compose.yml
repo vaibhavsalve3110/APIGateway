@@ -163,7 +163,9 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-no-reply@apigw.local}
       PUBLIC_SANDBOX_URL: https://sandbox-api.apigw.com
-    expose: ["8088"]
+    # 18088 on the host is for the parity harness and ad-hoc debugging only; partner and portal
+    # traffic always arrives through nginx.
+    ports: ["127.0.0.1:18088:8088"]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8088/actuator/health"]
       interval: 15s
@@ -192,7 +194,8 @@ services:
       DB_SCHEMA: ${DB_SCHEMA:-apim}
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env — 32+ characters}
       PORT: 8090
-    expose: ["8090"]
+    # 18090 on the host, same reason as backend-java above.
+    ports: ["127.0.0.1:18090:8090"]
 
   management-portal:
     profiles: ["app"]

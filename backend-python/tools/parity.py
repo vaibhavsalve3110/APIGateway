@@ -24,13 +24,20 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
-JAVA_URL = os.environ.get("JAVA_URL", "http://127.0.0.1:8088")
-PYTHON_URL = os.environ.get("PYTHON_URL", "http://127.0.0.1:8090")
+JAVA_URL = os.environ.get("JAVA_URL", "http://127.0.0.1:18088")
+PYTHON_URL = os.environ.get("PYTHON_URL", "http://127.0.0.1:18090")
 
 
 def _secret() -> str:
-    """The shared signing secret, from whichever env file this machine has."""
-    for candidate in (ROOT / "backend-python" / ".env", ROOT / "infra" / ".env"):
+    """The shared signing secret for whichever pair of services is being compared.
+
+    infra/.env comes first because the default targets are the containers, which take their secret
+    from there. backend-python/.env is the fallback for comparing two locally-run services, where
+    backend-java uses its built-in development key.
+    """
+    if os.environ.get("AUTH_JWT_SECRET"):
+        return os.environ["AUTH_JWT_SECRET"]
+    for candidate in (ROOT / "infra" / ".env", ROOT / "backend-python" / ".env"):
         if candidate.exists():
             m = re.search(r"^AUTH_JWT_SECRET=(.*)$", candidate.read_text(encoding="utf-8"), re.M)
             if m and m.group(1).strip():
