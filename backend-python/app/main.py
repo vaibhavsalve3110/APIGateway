@@ -16,7 +16,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import db
 from .common import errors
 from .common.problem import ApiException, default_code, problem_response
-from .routers import catalogue, dashboard, usage
+from .routers import catalogue, dashboard, products, usage
 from .settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-5s %(name)s : %(message)s")
@@ -48,6 +48,7 @@ app = FastAPI(
 
 app.include_router(catalogue.router)
 app.include_router(dashboard.router)
+app.include_router(products.router)
 app.include_router(usage.router)
 
 
