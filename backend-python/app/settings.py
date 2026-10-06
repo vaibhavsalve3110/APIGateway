@@ -28,6 +28,9 @@ class Settings(BaseSettings):
 
     auth_jwt_secret: str = Field(default="", alias="AUTH_JWT_SECRET")
 
+    # Shared with the APISIX gateways, which present it on every usage batch. Not a session token.
+    usage_ingest_token: str = Field(default="change-me-ingest-token", alias="USAGE_INGEST_TOKEN")
+
     @field_validator("database_url")
     @classmethod
     def _require_async_driver(cls, value: str) -> str:

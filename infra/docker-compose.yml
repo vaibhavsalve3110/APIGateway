@@ -153,7 +153,10 @@ services:
       APISIX_PRODUCTION_ADMIN_URL: http://apisix-production:9180
       APISIX_PRODUCTION_ADMIN_KEY: ${APISIX_PRODUCTION_ADMIN_KEY:-change-me-production-admin-key}
       GATEWAY_REDIS_HOST: valkey
-      USAGE_SINK_URL: http://backend-java:8088/internal/usage/batch
+      # Where the gateways post their usage batches. They reach the control plane directly rather
+      # than through nginx, so this variable -- not an nginx line -- is what moves this one route
+      # between the services, and what moves it back.
+      USAGE_SINK_URL: http://backend-python:8090/internal/usage/batch
       USAGE_INGEST_TOKEN: ${USAGE_INGEST_TOKEN:-change-me-ingest-token}
       # Gmail needs an App Password, not the account password, and 2-Step Verification must be on.
       # Leave SMTP_HOST empty to run without mail: one-time codes are logged and shown in the portal.
@@ -193,6 +196,8 @@ services:
       DATABASE_URL: postgresql+asyncpg://apigw:${DB_PASSWORD:?set DB_PASSWORD in infra/.env}@${DB_HOST:-host.docker.internal}:${DB_PORT:-5432}/apigw
       DB_SCHEMA: ${DB_SCHEMA:-apim}
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env — 32+ characters}
+      # The gateways present this on every usage batch; both control planes must expect the same one.
+      USAGE_INGEST_TOKEN: ${USAGE_INGEST_TOKEN:-change-me-ingest-token}
       PORT: 8090
     # 18090 on the host, same reason as backend-java above.
     ports: ["127.0.0.1:18090:8090"]
