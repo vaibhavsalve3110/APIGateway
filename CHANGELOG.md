@@ -7,6 +7,43 @@ Database changes are Flyway migrations in `backend/src/main/resources/db/migrati
 in order, and are recorded in `apim.flyway_schema_history`. The one-time PostgreSQL setup script is
 `infra/postgres/local-setup.sql`.
 
+## 2026-10-06
+
+### The backend port moves to Python, on its own branch
+
+The language decision changed. Rather than overwrite the earlier work, each attempt keeps its own
+branch, and the tags below are fixed points that will not move:
+
+| Branch | Tag | Holds |
+|---|---|---|
+| `main` | `java-backend-v1` | Java as the whole backend, at `backend/` |
+| `node-migration` | `node-port-v1` | the NestJS port: foundation, parity harness, 9 routes |
+| `python-migration` | — | this work: Java plus `backend-python/` |
+
+- **New `backend-python/`: FastAPI, SQLAlchemy 2.0 async with asyncpg, Pydantic v2, PyJWT** on port
+  8090. Same database, same signing secret, same contracts as the Java service. `backend-node/` is
+  not on this branch; it is preserved on its own.
+- **Reached the Node port's coverage on the first pass** — `GET` on `/apis`, `/apis/{id}`,
+  `/partners`, `/partners/{id}`, `/partner-groups`, `/audit`, `/usage/report`, `/usage/logs` and
+  `/usage/apis/{id}/consumers`, all proven field-for-field against Java before being routed.
+- **`backend-python/tools/parity.py`** is the Python counterpart of the Node harness: it mints a
+  token in `TokenService`'s shape, calls both services, and prints every differing JSON path.
+- The schema stays Flyway's. There are no models and no migrations in this service, and nothing in
+  it issues DDL. No SQL names a schema either — the connection's `search_path` decides, so the same
+  build works against `apim` or `public`.
+
+**Two defects the parity harness found, which the Node port shares:**
+
+- `/usage/report` was missing `proxyPath`, `successRate`, `minLatencyMs`, `maxLatencyMs` and
+  `avgLatencyMs` from every entry. The earlier Node "match" was over a fifteen-minute window with no
+  traffic, so an empty list hid it. The rates also need `HALF_UP` rounding, which is not what
+  Python's `round()` or JavaScript's `Math.round()` do for ties.
+- Traffic whose API has since been deleted is reported by Java as `"Deleted API"`; both ports
+  returned `null`. The report additionally excludes events with no API at all, which neither did.
+
+`infra/sanity.sh` now lives in the repository: 22 read-only checks across the portals, both control
+planes, authentication, the gateways and TLS.
+
 ## 2026-10-03
 
 ### The Java-to-Node migration starts in earnest

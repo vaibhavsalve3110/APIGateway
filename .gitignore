@@ -22,3 +22,12 @@ Thumbs.db
 # Logs
 *.log
 infra/docker/certs/
+
+# Python service
+backend-python/.env
+backend-python/.venv/
+backend-python/**/__pycache__/
+backend-python/.ruff_cache/
+backend-python/.mypy_cache/
+backend-python/.pytest_cache/
+backend-python/*.egg-info/

@@ -125,7 +125,7 @@ services:
   # ------------------------------------------------------------------ the platform itself
   # Everything below runs only under --profile app.
 
-  # Java control plane. Owns the schema: Flyway runs here at startup, and backend-node reads the
+  # Java control plane. Owns the schema: Flyway runs here at startup, and backend-python reads the
   # result, so this service must be healthy before the Node one is useful.
   backend-java:
     profiles: ["app"]
@@ -171,12 +171,13 @@ services:
       start_period: 90s
       retries: 10
 
-  # NestJS control plane. Reads the same database; the schema is migrated by backend-java, never by
-  # Prisma, so this service waits for that one to be healthy before it starts.
-  backend-node:
+  # FastAPI control plane, the service routes are being migrated to. Reads the same database; the
+  # schema is migrated by backend-java and never by this service, so it waits for that one to be
+  # healthy before it starts.
+  backend-python:
     profiles: ["app"]
     build:
-      context: ../backend-node
+      context: ../backend-python
     restart: unless-stopped
     depends_on:
       backend-java:
@@ -184,11 +185,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://apigw:${DB_PASSWORD:?set DB_PASSWORD in infra/.env}@${DB_HOST:-host.docker.internal}:${DB_PORT:-5432}/apigw?schema=${DB_SCHEMA:-apim}
+      ENVIRONMENT: production
+      # asyncpg, not psycopg: a blocking driver would stall the event loop. The schema travels in
+      # DB_SCHEMA rather than the URL, because asyncpg rejects libpq query parameters.
+      DATABASE_URL: postgresql+asyncpg://apigw:${DB_PASSWORD:?set DB_PASSWORD in infra/.env}@${DB_HOST:-host.docker.internal}:${DB_PORT:-5432}/apigw
+      DB_SCHEMA: ${DB_SCHEMA:-apim}
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env — 32+ characters}
-      PORT: 8089
-    expose: ["8089"]
+      PORT: 8090
+    expose: ["8090"]
 
   management-portal:
     profiles: ["app"]
@@ -216,7 +220,7 @@ services:
     profiles: ["app"]
     image: nginx:1.29-alpine
     restart: unless-stopped
-    depends_on: [backend-java, backend-node, management-portal, developer-portal]
+    depends_on: [backend-java, backend-python, management-portal, developer-portal]
     ports:
       - "80:80"
       - "443:443"
