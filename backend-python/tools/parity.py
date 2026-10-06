@@ -95,7 +95,20 @@ def diff(a: Any, b: Any, path: str = "", out: list[str] | None = None) -> list[s
     return out
 
 
-def main(paths: list[str]) -> int:
+def main(argv: list[str]) -> int:
+    # --ignore <json-path> skips a field that cannot match by nature, such as a window boundary each
+    # service computes from its own clock at its own call time. Everything else must be identical.
+    ignored: list[str] = []
+    paths: list[str] = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--ignore" and i + 1 < len(argv):
+            ignored.append(argv[i + 1])
+            i += 2
+        else:
+            paths.append(argv[i])
+            i += 1
+
     token = _token(["ADMIN"])
     failed = 0
     for path in paths:
@@ -112,10 +125,11 @@ def main(paths: list[str]) -> int:
             failed += 1
             continue
 
-        differences = diff(java, python)
+        differences = [d for d in diff(java, python) if not any(d.startswith(f"{p}:") for p in ignored)]
         if not differences:
             size = f"{len(java)} items" if isinstance(java, list) else "object"
-            print(f"  MATCH {path}  ({size})")
+            note = f", ignoring {', '.join(ignored)}" if ignored else ""
+            print(f"  MATCH {path}  ({size}{note})")
         else:
             failed += 1
             print(f"  DIFF  {path}")
