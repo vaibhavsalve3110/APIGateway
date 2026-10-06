@@ -198,6 +198,9 @@ services:
       AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in infra/.env — 32+ characters}
       # The gateways present this on every usage batch; both control planes must expect the same one.
       USAGE_INGEST_TOKEN: ${USAGE_INGEST_TOKEN:-change-me-ingest-token}
+      # Shown to partners on an API page; must match what backend-java tells them.
+      PUBLIC_SANDBOX_URL: ${PUBLIC_SANDBOX_URL:-https://sandbox-api.apigw.com}
+      TRY_IT_MODE: ${TRY_IT_MODE:-GATEWAY}
       PORT: 8090
     # 18090 on the host, same reason as backend-java above.
     ports: ["127.0.0.1:18090:8090"]

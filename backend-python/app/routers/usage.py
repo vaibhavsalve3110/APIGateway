@@ -72,14 +72,26 @@ def _iso(value: datetime) -> str:
     return java_instant(text_value) or text_value
 
 
-@router.get("/usage/report", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
-async def report(
-    frm: datetime | None = Query(default=None, alias="from"),
-    to: datetime | None = None,
-    clientId: str | None = None,  # noqa: N803 - query name matches the Java API
-    conn: AsyncConnection = Depends(connection),
+async def build_report(
+    conn: AsyncConnection,
+    frm: datetime | None,
+    to: datetime | None,
+    client_ids: list[str] | None,
 ) -> dict[str, Any]:
+    """Shared by the admin report and the partner's own.
+
+    `client_ids` None means every caller; an empty list means this caller owns none, so nothing
+    matches — not everything, which would leak one organization's traffic into another's view.
+    """
     start, end = _window(frm, to)
+    if client_ids is not None and not client_ids:
+        return {
+            "from": _iso(start),
+            "to": _iso(end),
+            "totalSuccess": 0,
+            "totalFailed": 0,
+            "apis": [],
+        }
     # `u.api_id IS NOT NULL` matches UsageRepository.aggregateAll: a call the gateway could not
     # attribute to an API is counted in neither the per-API rows nor the totals.
     result = await conn.execute(
@@ -98,13 +110,18 @@ async def report(
              WHERE u.occurred_at >= :start
                AND u.occurred_at < :end
                AND u.api_id IS NOT NULL
-               AND (CAST(:client_id AS varchar) IS NULL OR u.client_id = :client_id)
+               AND (CAST(:all_clients AS boolean) OR u.client_id = ANY(:client_ids))
              GROUP BY u.api_id, a.name, a.proxy_path
              ORDER BY (COUNT(*) FILTER (WHERE u.status_code < 400)
                        + COUNT(*) FILTER (WHERE u.status_code >= 400)) DESC
             """
         ),
-        {"start": start, "end": end, "client_id": clientId},
+        {
+            "start": start,
+            "end": end,
+            "all_clients": client_ids is None,
+            "client_ids": client_ids or [""],
+        },
     )
     apis = [
         {
@@ -130,17 +147,29 @@ async def report(
     }
 
 
-@router.get("/usage/logs", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
-async def logs(
+@router.get("/usage/report", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+async def report(
     frm: datetime | None = Query(default=None, alias="from"),
     to: datetime | None = None,
-    status: StatusFilter = "ALL",
-    search: str | None = None,
-    clientId: str | None = None,  # noqa: N803
-    limit: int = Query(default=200, ge=1, le=1000),
+    clientId: str | None = None,  # noqa: N803 - query name matches the Java API
     conn: AsyncConnection = Depends(connection),
+) -> dict[str, Any]:
+    return await build_report(conn, frm, to, [clientId] if clientId else None)
+
+
+async def build_logs(
+    conn: AsyncConnection,
+    frm: datetime | None,
+    to: datetime | None,
+    status: StatusFilter,
+    search: str | None,
+    client_ids: list[str] | None,
+    limit: int,
 ) -> list[dict[str, Any]]:
+    """Shared by the admin log viewer and the partner's own; see build_report on `client_ids`."""
     start, end = _window(frm, to)
+    if client_ids is not None and not client_ids:
+        return []
     low, high = STATUS_RANGES[status]
     term = f"%{search.strip().lower()}%" if search and search.strip() else None
 
@@ -157,7 +186,7 @@ async def logs(
              WHERE u.occurred_at >= :start
                AND u.occurred_at < :end
                AND u.status_code BETWEEN :low AND :high
-               AND (CAST(:client_id AS varchar) IS NULL OR u.client_id = :client_id)
+               AND (CAST(:all_clients AS boolean) OR u.client_id = ANY(:client_ids))
                AND (CAST(:term AS varchar) IS NULL
                     OR LOWER(a.name) LIKE :term OR LOWER(a.proxy_path) LIKE :term)
              ORDER BY u.occurred_at DESC, u.id DESC
@@ -169,7 +198,8 @@ async def logs(
             "end": end,
             "low": low,
             "high": high,
-            "client_id": clientId,
+            "all_clients": client_ids is None,
+            "client_ids": client_ids or [""],
             "term": term,
             "limit": limit,
         },
@@ -191,6 +221,21 @@ async def logs(
         }
         for row in result
     ]
+
+
+@router.get("/usage/logs", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+async def logs(
+    frm: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = None,
+    status: StatusFilter = "ALL",
+    search: str | None = None,
+    clientId: str | None = None,  # noqa: N803
+    limit: int = Query(default=200, ge=1, le=1000),
+    conn: AsyncConnection = Depends(connection),
+) -> list[dict[str, Any]]:
+    return await build_logs(
+        conn, frm, to, status, search, [clientId] if clientId else None, limit
+    )
 
 
 @router.get(

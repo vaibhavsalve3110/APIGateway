@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     # Shared with the APISIX gateways, which present it on every usage batch. Not a session token.
     usage_ingest_token: str = Field(default="change-me-ingest-token", alias="USAGE_INGEST_TOKEN")
 
+    # Shown to partners on an API's page as the base URL to call, and whether Try-it-live is simulated.
+    public_sandbox_url: str = Field(
+        default="http://sandbox-api.apigw.com:9080", alias="PUBLIC_SANDBOX_URL"
+    )
+    try_it_mode: str = Field(default="GATEWAY", alias="TRY_IT_MODE")
+
     @field_validator("database_url")
     @classmethod
     def _require_async_driver(cls, value: str) -> str:
