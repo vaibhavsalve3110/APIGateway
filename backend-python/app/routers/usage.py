@@ -261,22 +261,79 @@ async def consumers(api_id: str, conn: AsyncConnection = Depends(connection)) ->
     return [row.name for row in result]
 
 
+@router.get("/audit/actors", dependencies=[Depends(requires("ADMIN"))])
+async def audit_actors(
+    conn: AsyncConnection = Depends(connection),
+) -> list[dict[str, Any]]:
+    """Everyone who appears in the audit trail, for the "who" filter.
+
+    Read from the trail itself rather than from the user tables: somebody who has since been deleted
+    still did what they did, and their history must stay findable.
+    """
+    rows = await conn.execute(
+        text(
+            f"""
+            SELECT actor, MAX(actor_role) AS actor_role, COUNT(*) AS entries,
+                   {instant_column('MAX(occurred_at)', 'last_seen')}
+              FROM audit_event
+             GROUP BY actor
+             ORDER BY MAX(occurred_at) DESC
+            """
+        )
+    )
+    return [
+        {
+            "actor": r.actor,
+            "actorRole": r.actor_role,
+            "entries": int(r.entries),
+            "lastSeen": java_instant(r.last_seen),
+        }
+        for r in rows
+    ]
+
+
 @router.get("/audit", dependencies=[Depends(requires("ADMIN"))])
 async def audit(
     limit: int = Query(default=100, ge=1, le=1000),
+    frm: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = None,
+    actor: str | None = None,
+    action: str | None = None,
+    search: str | None = None,
     conn: AsyncConnection = Depends(connection),
 ) -> list[dict[str, Any]]:
+    """The audit trail, newest first.
+
+    Every filter is optional and absent means no filter, so an unfiltered call returns exactly what
+    backend-java returns. Note that these parameters exist only here: if this route is ever pointed
+    back at Java they are silently ignored rather than rejected, and the page would quietly show
+    everything.
+    """
     result = await conn.execute(
         text(
             f"""
             SELECT id, {instant_column('occurred_at', 'occurred_at')}, actor, actor_role, action,
                    object_type, object_id, detail
               FROM audit_event
+             WHERE (CAST(:frm AS timestamptz) IS NULL OR occurred_at >= :frm)
+               AND (CAST(:to AS timestamptz) IS NULL OR occurred_at < :to)
+               AND (CAST(:actor AS varchar) IS NULL OR LOWER(actor) = LOWER(:actor))
+               AND (CAST(:action AS varchar) IS NULL OR action = :action)
+               AND (CAST(:search AS varchar) IS NULL
+                    OR LOWER(detail) LIKE :search OR LOWER(object_type) LIKE :search
+                    OR LOWER(coalesce(object_id, '')) LIKE :search)
              ORDER BY occurred_at DESC, id DESC
              LIMIT :limit
             """
         ),
-        {"limit": limit},
+        {
+            "limit": limit,
+            "frm": frm,
+            "to": to,
+            "actor": actor.strip() if actor and actor.strip() else None,
+            "action": action.strip().upper() if action and action.strip() else None,
+            "search": f"%{search.strip().lower()}%" if search and search.strip() else None,
+        },
     )
     return [
         {

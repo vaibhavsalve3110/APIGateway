@@ -177,22 +177,90 @@ async def dashboard(
 async def errors(
     source: str | None = None,
     limit: int = Query(default=100, ge=1, le=1000),
+    frm: datetime | None = Query(default=None, alias="from"),
+    to: datetime | None = None,
+    partnerId: str | None = None,  # noqa: N803 - query name matches the rest of the admin API
+    search: str | None = None,
     conn: AsyncConnection = Depends(connection),
 ) -> list[dict[str, Any]]:
-    """The system error log. Admin only: rows carry stack traces and the addresses of signed-in users."""
+    """The system error log. Admin only: rows carry stack traces and the addresses of signed-in users.
+
+    Each row carries the organization it belongs to, where one can be worked out. `error_event` has no
+    partner column — what it records is who was signed in (`actor`) and what they called (`request`) —
+    so the organization is derived: the actor is one of its portal users, or the request path names
+    it. `partnerId=none` returns only what could not be attributed to any organization: the platform's
+    own failures, which is what you want when asking whether the system itself is unhealthy.
+
+    Attribution is best-effort by nature. A failure with nobody signed in cannot be traced to anyone,
+    and reads as a platform failure rather than being guessed at.
+
+    Like the audit filters, these parameters exist only in this service.
+    """
     normalised = source.strip().upper() if source and source.strip() else None
+    wants_partner = bool(partnerId and partnerId.strip() and partnerId.strip().lower() != "none")
+    wants_systemic = bool(partnerId and partnerId.strip().lower() == "none")
+
+    # Attribution happens once, here, and both the returned column and the filter read it. Two
+    # definitions would eventually disagree, and the column saying one thing while the filter does
+    # another is worse than having neither.
+    #
+    # Two ways an error points at an organization:
+    #   by_actor   — a portal user of theirs was signed in;
+    #   by_request — the path names the organization, which is how an admin's action on them reads.
+    attributed = f"""
+        SELECT e.id, {instant_column('e.occurred_at', 'occurred_at')},
+               -- The formatted column above is text; filtering and ordering need the real value.
+               e.occurred_at AS occurred_raw,
+               e.source, e.code,
+               e.message, e.detail, e.actor, e.request, e.client_ip, e.reference,
+               COALESCE(by_actor.id, by_request.id)     AS partner_id,
+               COALESCE(by_actor.code, by_request.code) AS partner_code,
+               COALESCE(by_actor.name, by_request.name) AS partner_name
+          FROM error_event e
+          LEFT JOIN partner_user pu ON LOWER(pu.email) = LOWER(e.actor)
+          LEFT JOIN partner by_actor ON by_actor.id = pu.partner_id
+          -- substring returns NULL when the request carries no UUID, so the cast is safe.
+          LEFT JOIN partner by_request ON by_request.id = CAST(
+              substring(e.request from
+                  '[0-9a-fA-F]{{8}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{4}}-[0-9a-fA-F]{{12}}'
+              ) AS uuid)
+    """
+
+    if wants_partner:
+        scope = "AND a.partner_id = CAST(:partner_id AS uuid)"
+    elif wants_systemic:
+        # Nobody signed in, or signed in as somebody who belongs to no organization.
+        scope = "AND a.partner_id IS NULL"
+    else:
+        scope = ""
+
     result = await conn.execute(
         text(
             f"""
-            SELECT id, {instant_column('occurred_at', 'occurred_at')}, source, code, message, detail,
-                   actor, request, client_ip, reference
-              FROM error_event
-             WHERE (CAST(:source AS varchar) IS NULL OR source = :source)
-             ORDER BY occurred_at DESC, id DESC
+            WITH a AS ({attributed})
+            SELECT * FROM a
+             WHERE (CAST(:source AS varchar) IS NULL OR a.source = :source)
+               AND (CAST(:frm AS timestamptz) IS NULL OR a.occurred_raw >= :frm)
+               AND (CAST(:to AS timestamptz) IS NULL OR a.occurred_raw < :to)
+               AND (CAST(:search AS varchar) IS NULL
+                    OR LOWER(a.message) LIKE :search OR LOWER(COALESCE(a.detail, '')) LIKE :search
+                    OR LOWER(a.code) LIKE :search OR LOWER(COALESCE(a.request, '')) LIKE :search
+                    OR LOWER(a.reference) LIKE :search
+                    OR LOWER(COALESCE(a.partner_name, '')) LIKE :search
+                    OR LOWER(COALESCE(a.partner_code, '')) LIKE :search)
+               {scope}
+             ORDER BY a.occurred_raw DESC, a.id DESC
              LIMIT :limit
             """
         ),
-        {"source": normalised, "limit": limit},
+        {
+            "source": normalised,
+            "limit": limit,
+            "frm": frm,
+            "to": to,
+            "search": f"%{search.strip().lower()}%" if search and search.strip() else None,
+            **({"partner_id": partnerId.strip()} if wants_partner else {}),
+        },
     )
     return [
         {
@@ -206,6 +274,10 @@ async def errors(
             "request": r.request,
             "clientIp": r.client_ip,
             "reference": r.reference,
+            # Null means the failure belongs to no organization — the platform's own.
+            "partnerId": str(r.partner_id) if r.partner_id else None,
+            "partnerCode": r.partner_code,
+            "partnerName": r.partner_name,
         }
         for r in result
     ]

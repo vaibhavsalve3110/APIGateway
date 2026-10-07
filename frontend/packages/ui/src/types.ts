@@ -286,6 +286,13 @@ export interface ErrorView {
   clientIp: string | null;
   /** Short id quoted to the caller, so a support report can be matched to this row. */
   reference: string;
+  /**
+   * The organization the failure belongs to, worked out from who was signed in or what was called.
+   * Null means it could not be attributed to one — a platform failure rather than a partner's.
+   */
+  partnerId: string | null;
+  partnerCode: string | null;
+  partnerName: string | null;
 }
 
 export interface AuditView {
