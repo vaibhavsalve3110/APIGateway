@@ -190,7 +190,10 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      ENVIRONMENT: production
+      # Mirrors SPRING_PROFILES_ACTIVE on backend-java, because it decides the same thing: whether
+      # a missing CRYPTO_MASTER_KEY or AUTH_JWT_SECRET is fatal. The Java service runs the demo
+      # profile here, so this must not say production or the two disagree about the same database.
+      ENVIRONMENT: ${ENVIRONMENT:-demo}
       # asyncpg, not psycopg: a blocking driver would stall the event loop. The schema travels in
       # DB_SCHEMA rather than the URL, because asyncpg rejects libpq query parameters.
       DATABASE_URL: postgresql+asyncpg://apigw:${DB_PASSWORD:?set DB_PASSWORD in infra/.env}@${DB_HOST:-host.docker.internal}:${DB_PORT:-5432}/apigw

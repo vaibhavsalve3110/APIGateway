@@ -17,6 +17,9 @@ DEV_JWT_SECRET = "apigw-local-development-jwt-signing-secret-32b"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    # The deployment profile, mirroring SPRING_PROFILES_ACTIVE on backend-java: only "production"
+    # makes a missing signing secret or master key fatal. Naming a release build "production" here
+    # while the Java service runs another profile makes the two disagree about the same database.
     environment: str = Field(default="development", alias="ENVIRONMENT")
     port: int = Field(default=8090, alias="PORT")
 
@@ -27,6 +30,10 @@ class Settings(BaseSettings):
     db_schema: str = Field(default="apim", alias="DB_SCHEMA")
 
     auth_jwt_secret: str = Field(default="", alias="AUTH_JWT_SECRET")
+
+    # 32 random bytes, base64. Empty outside production falls back to the same built-in development
+    # key backend-java uses, which is what lets either service read the other'''s stored secrets.
+    crypto_master_key: str = Field(default="", alias="CRYPTO_MASTER_KEY")
 
     # Shared with the APISIX gateways, which present it on every usage batch. Not a session token.
     usage_ingest_token: str = Field(default="change-me-ingest-token", alias="USAGE_INGEST_TOKEN")
