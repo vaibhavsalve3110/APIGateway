@@ -19,6 +19,7 @@ from .common import errors
 from .common.problem import ApiException, default_code, problem_response
 from .routers import (
     api_admin,
+    auth_routes,
     catalogue,
     content,
     dashboard,
@@ -60,6 +61,7 @@ app = FastAPI(
 )
 
 app.include_router(api_admin.router)
+app.include_router(auth_routes.router)
 app.include_router(catalogue.router)
 app.include_router(content.router)
 app.include_router(dashboard.router)

@@ -62,6 +62,19 @@ class Settings(BaseSettings):
     smtp_starttls: bool = Field(default=True, alias="SMTP_STARTTLS")
     mail_from: str = Field(default="no-reply@apigw.local", alias="MAIL_FROM")
 
+    # --- sign-in. Mirrors apigw.auth on the Java side; both services must agree, because a code
+    # issued by one is verified by whichever happens to serve the next request.
+    token_ttl_hours: int = Field(default=8, alias="TOKEN_TTL_HOURS")
+    otp_ttl_minutes: int = Field(default=5, alias="OTP_TTL_MINUTES")
+    otp_length: int = Field(default=6, alias="OTP_LENGTH")
+    otp_max_attempts: int = Field(default=5, alias="OTP_MAX_ATTEMPTS")
+    otp_resend_cooldown_seconds: int = Field(default=30, alias="OTP_RESEND_COOLDOWN_SECONDS")
+    otp_max_requests_per_window: int = Field(default=5, alias="OTP_MAX_REQUESTS_PER_WINDOW")
+    otp_request_window_minutes: int = Field(default=15, alias="OTP_REQUEST_WINDOW_MINUTES")
+    # True tells an unregistered address so ("Invalid user"), which is what operators expect. False
+    # gives it the same answer as a registered one, so nobody can discover who holds an account.
+    reveal_unknown_email: bool = Field(default=True, alias="REVEAL_UNKNOWN_EMAIL")
+
     # --- the APISIX gateways. Sync off means the service runs without one, which is how a developer
     # machine works; everything else about an API behaves identically.
     gateway_sync_enabled: bool = Field(default=True, alias="GATEWAY_SYNC_ENABLED")
