@@ -23,6 +23,7 @@ from .routers import (
     content,
     dashboard,
     ingest,
+    keys,
     partner_admin,
     partner_portal,
     partner_users,
@@ -63,6 +64,7 @@ app.include_router(catalogue.router)
 app.include_router(content.router)
 app.include_router(dashboard.router)
 app.include_router(ingest.router)
+app.include_router(keys.router)
 app.include_router(partner_admin.router)
 app.include_router(partner_portal.router)
 app.include_router(partner_users.router)

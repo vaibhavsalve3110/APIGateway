@@ -4,10 +4,9 @@ Registering an organization issues its credentials in the same transaction: an R
 and an IPV salt. The private key and the salt are returned once and then unrecoverable — only the
 public key, the fingerprint, the masked salt and the encrypted salt are kept.
 
-Access tier and status changes publish nothing to the gateway beyond the consumer record; revoking
-production access or disabling an organization is what the key lifecycle reacts to, and that work
-belongs to phase 5. Until then those two paths are deliberately refused rather than silently
-half-done — see `_unsupported`.
+Withdrawing production access and disabling an organization both revoke the matching security keys
+in the same transaction, and remove their credentials from the gateway once those rows are committed:
+an organization that may no longer call an environment must not keep a working key for it.
 """
 
 import re
@@ -30,6 +29,7 @@ from ..crypto import SecretCipher
 from ..db import engine
 from ..gateway import GatewayClient
 from .catalogue import _PARTNER_COLUMNS, _partner_view
+from .keys import revoke_all
 from .partner_users import EMAIL_PATTERN
 
 router = APIRouter(prefix="/api/admin")
@@ -137,7 +137,8 @@ async def _require(conn: AsyncConnection, partner_id: uuid.UUID) -> Any:
     row = (
         await conn.execute(
             text(
-                "SELECT id, code, name, contact_email, access_tier, status, client_id_production,"
+                "SELECT id, code, name, contact_email, access_tier, status,"
+                " client_id_sandbox, client_id_production,"
                 " ipv_salt_cipher, ipv_salt_masked, signature_fingerprint"
                 " FROM partner WHERE id = :id"
             ),
@@ -163,18 +164,15 @@ async def _audit(
     )
 
 
-def _unsupported(what: str) -> ApiException:
-    """Refuse rather than half-do it.
-
-    Revoking production access and disabling an organization both have to revoke security keys,
-    which backend-java does through an event the key lifecycle listens to. That lifecycle is phase 5.
-    Performing the database half here would leave live keys behind — worse than not accepting it.
-    """
-    return ApiException(
-        501,
-        "NOT_MIGRATED",
-        f"{what} is still handled by the Java control plane while key revocation is being migrated",
-    )
+async def _drop_credentials(partner: Any, revoked: list[tuple[str, str]]) -> None:
+    """Remove the revoked credentials from the gateways, after the rows are committed."""
+    gateway = GatewayClient()
+    for environment, key_id in revoked:
+        client_id = (
+            partner.client_id_production if environment == "PRODUCTION" else partner.client_id_sandbox
+        )
+        if client_id:
+            await gateway.delete_credential(environment, client_id, key_id)
 
 
 # --------------------------------------------------------------------------- groups
@@ -325,7 +323,21 @@ async def change_tier(
         if partner.access_tier == request.accessTier:
             return await _view(conn, partner_id)
         if request.accessTier != "PRODUCTION":
-            raise _unsupported("Withdrawing production access")
+            # CP-SEC: production access and a live production key cannot coexist.
+            revoked = await revoke_all(conn, partner, ("PRODUCTION",), actor, "Production access withdrawn")
+            await conn.execute(
+                text(
+                    "UPDATE partner SET access_tier = :tier, updated_at = :now WHERE id = :id"
+                ),
+                {"id": str(partner_id), "tier": request.accessTier, "now": datetime.now(UTC)},
+            )
+            await _audit(
+                conn, actor, "ACCESS_TIER", AUDIT_PARTNER, partner_id,
+                f"Access tier changed from {partner.access_tier} to {request.accessTier}",
+            )
+            view = await _view(conn, partner_id)
+            await _drop_credentials(partner, revoked)
+            return view
 
         client_id = partner.client_id_production or await _unique_client_id(
             conn, partner.name, "PRODUCTION"
@@ -362,17 +374,27 @@ async def set_status(
         partner = await _require(conn, partner_id)
         if partner.status == request.status:
             return await _view(conn, partner_id)
-        if request.status == "DISABLED":
-            raise _unsupported("Disabling an organization")
-
+        # Disabling revokes every live key: an organization that cannot sign in must not keep
+        # calling the gateway either.
+        revoked = (
+            await revoke_all(conn, partner, ("SANDBOX", "PRODUCTION"), actor, "partner disabled")
+            if request.status == "DISABLED"
+            else []
+        )
         await conn.execute(
             text("UPDATE partner SET status = :status, updated_at = :now WHERE id = :id"),
             {"id": str(partner_id), "status": request.status, "now": datetime.now(UTC)},
         )
         await _audit(
-            conn, actor, "ENABLE", AUDIT_PARTNER, partner_id, f"{partner.name} re-enabled"
+            conn, actor,
+            "DISABLE" if request.status == "DISABLED" else "ENABLE",
+            AUDIT_PARTNER, partner_id,
+            f"{partner.name}" + (" disabled — all keys revoked" if request.status == "DISABLED"
+                                 else " re-enabled"),
         )
-        return await _view(conn, partner_id)
+        view = await _view(conn, partner_id)
+    await _drop_credentials(partner, revoked)
+    return view
 
 
 # --------------------------------------------------------------------------- credentials

@@ -44,6 +44,24 @@ class Settings(BaseSettings):
     )
     try_it_mode: str = Field(default="GATEWAY", alias="TRY_IT_MODE")
 
+    # --- security keys. CP-SEC-04: the previous key stays valid this long after a rotation.
+    key_overlap_minutes: int = Field(default=20, alias="KEY_OVERLAP_MINUTES")
+    # Sends the new key itself to the Partner Admins. False sends only the change notice.
+    email_key_to_admin: bool = Field(default=True, alias="EMAIL_KEY_TO_ADMIN")
+    # Expiring keys at the end of their overlap window must be ended by exactly one service: both
+    # running it expires them twice, neither running it leaves them live forever. Off here while
+    # backend-java still owns the job.
+    key_expiry_job_enabled: bool = Field(default=False, alias="KEY_EXPIRY_JOB_ENABLED")
+
+    # --- mail. No host means notices are logged instead of sent, which is how a developer machine
+    # behaves and how this network behaves while outbound SMTP is blocked.
+    smtp_host: str = Field(default="", alias="SMTP_HOST")
+    smtp_port: int = Field(default=587, alias="SMTP_PORT")
+    smtp_user: str = Field(default="", alias="SMTP_USER")
+    smtp_password: str = Field(default="", alias="SMTP_PASSWORD")
+    smtp_starttls: bool = Field(default=True, alias="SMTP_STARTTLS")
+    mail_from: str = Field(default="no-reply@apigw.local", alias="MAIL_FROM")
+
     # --- the APISIX gateways. Sync off means the service runs without one, which is how a developer
     # machine works; everything else about an API behaves identically.
     gateway_sync_enabled: bool = Field(default=True, alias="GATEWAY_SYNC_ENABLED")
