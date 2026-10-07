@@ -46,14 +46,39 @@ _PARTNER_COLUMNS = f"""
 """
 
 
+def normalise_documentation(documentation: dict[str, Any] | None) -> dict[str, Any]:
+    """ApiDocumentation's compact constructor, in Python.
+
+    Java fills every absent list with an empty one and defaults a missing source to MANUAL, so an API
+    with no documentation reads as an empty document rather than as null. Returning null here instead
+    is a difference the portals would render as a missing section.
+    """
+    doc = documentation or {}
+    source = (doc.get("source") or "").strip()
+    return {
+        "source": source or "MANUAL",
+        "queryParameters": doc.get("queryParameters") or [],
+        "requestHeaders": doc.get("requestHeaders") or [],
+        "requestBodyFields": doc.get("requestBodyFields") or [],
+        "requestBodyExample": doc.get("requestBodyExample"),
+        "responseHeaders": doc.get("responseHeaders") or [],
+        "responses": doc.get("responses") or [],
+    }
+
+
 def _documentation(stored: str | None) -> Any:
-    """Stored as a JSON string by DocumentationCodec. A malformed blob must not fail the whole list."""
-    if not stored:
-        return None
+    """Stored as a JSON string by DocumentationCodec; absent or blank reads as an empty document.
+
+    One deliberate difference: Java throws on a malformed blob, which fails the whole list. A corrupt
+    row here reads as empty instead, so one bad record cannot hide every good one.
+    """
+    if not stored or not stored.strip():
+        return normalise_documentation(None)
     try:
-        return json.loads(stored)
+        parsed = json.loads(stored)
     except ValueError:
-        return None
+        return normalise_documentation(None)
+    return normalise_documentation(parsed if isinstance(parsed, dict) else None)
 
 
 def _api_view(row: Any) -> dict[str, Any]:

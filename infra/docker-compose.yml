@@ -201,6 +201,15 @@ services:
       # Shown to partners on an API page; must match what backend-java tells them.
       PUBLIC_SANDBOX_URL: ${PUBLIC_SANDBOX_URL:-https://sandbox-api.apigw.com}
       TRY_IT_MODE: ${TRY_IT_MODE:-GATEWAY}
+      # Both control planes configure the same two gateways, so these must match backend-java's.
+      GATEWAY_SYNC_ENABLED: ${GATEWAY_SYNC_ENABLED:-true}
+      APISIX_SANDBOX_ADMIN_URL: http://apisix-sandbox:9180
+      APISIX_SANDBOX_ADMIN_KEY: ${APISIX_SANDBOX_ADMIN_KEY:-change-me-sandbox-admin-key}
+      APISIX_PRODUCTION_ADMIN_URL: http://apisix-production:9180
+      APISIX_PRODUCTION_ADMIN_KEY: ${APISIX_PRODUCTION_ADMIN_KEY:-change-me-production-admin-key}
+      GATEWAY_REDIS_HOST: valkey
+      GATEWAY_SANDBOX_HOSTS: sandbox-api.apigw.com
+      GATEWAY_PRODUCTION_HOSTS: api.apigw.com
       PORT: 8090
     # 18090 on the host, same reason as backend-java above.
     ports: ["127.0.0.1:18090:8090"]

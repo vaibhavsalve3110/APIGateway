@@ -11,12 +11,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import db
 from .common import errors
 from .common.problem import ApiException, default_code, problem_response
 from .routers import (
+    api_admin,
     catalogue,
     content,
     dashboard,
@@ -55,6 +57,7 @@ app = FastAPI(
     openapi_url="/v3/api-docs",
 )
 
+app.include_router(api_admin.router)
 app.include_router(catalogue.router)
 app.include_router(content.router)
 app.include_router(dashboard.router)
@@ -102,6 +105,21 @@ async def _validation(request: Request, exc: RequestValidationError) -> JSONResp
 async def _http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     detail = exc.detail if isinstance(exc.detail, str) else "Request failed"
     return problem_response(request, exc.status_code, default_code(exc.status_code), detail)
+
+
+@app.exception_handler(IntegrityError)
+async def _integrity(request: Request, _exc: IntegrityError) -> JSONResponse:
+    """A unique or foreign-key violation is the caller asking for something impossible, not a defect.
+
+    Without this it would surface as a 500 with a reference, and the portals would show "something
+    went wrong" where backend-java shows which name or path is already taken.
+    """
+    return problem_response(
+        request,
+        409,
+        "DUPLICATE",
+        "The change conflicts with an existing record (a name, path or Client ID is already in use)",
+    )
 
 
 @app.exception_handler(Exception)

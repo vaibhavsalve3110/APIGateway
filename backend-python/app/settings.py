@@ -37,6 +37,39 @@ class Settings(BaseSettings):
     )
     try_it_mode: str = Field(default="GATEWAY", alias="TRY_IT_MODE")
 
+    # --- the APISIX gateways. Sync off means the service runs without one, which is how a developer
+    # machine works; everything else about an API behaves identically.
+    gateway_sync_enabled: bool = Field(default=True, alias="GATEWAY_SYNC_ENABLED")
+    apisix_sandbox_admin_url: str = Field(
+        default="http://localhost:9180", alias="APISIX_SANDBOX_ADMIN_URL"
+    )
+    apisix_sandbox_admin_key: str = Field(
+        default="change-me-sandbox-admin-key", alias="APISIX_SANDBOX_ADMIN_KEY"
+    )
+    apisix_production_admin_url: str = Field(
+        default="http://localhost:9181", alias="APISIX_PRODUCTION_ADMIN_URL"
+    )
+    apisix_production_admin_key: str = Field(
+        default="change-me-production-admin-key", alias="APISIX_PRODUCTION_ADMIN_KEY"
+    )
+    gateway_redis_host: str = Field(default="valkey", alias="GATEWAY_REDIS_HOST")
+    gateway_redis_port: int = Field(default=6379, alias="GATEWAY_REDIS_PORT")
+    # Comma-separated; the hostnames each gateway answers on.
+    gateway_sandbox_hosts_raw: str = Field(
+        default="sandbox-api.apigw.com", alias="GATEWAY_SANDBOX_HOSTS"
+    )
+    gateway_production_hosts_raw: str = Field(
+        default="api.apigw.com", alias="GATEWAY_PRODUCTION_HOSTS"
+    )
+
+    @property
+    def gateway_sandbox_hosts(self) -> list[str]:
+        return [h.strip() for h in self.gateway_sandbox_hosts_raw.split(",") if h.strip()]
+
+    @property
+    def gateway_production_hosts(self) -> list[str]:
+        return [h.strip() for h in self.gateway_production_hosts_raw.split(",") if h.strip()]
+
     @field_validator("database_url")
     @classmethod
     def _require_async_driver(cls, value: str) -> str:
