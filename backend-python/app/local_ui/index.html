@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>APIM Local Console</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --line: #e3e6ea; --ink: #16191d; --muted: #6b7280;
+    --accent: #1f4ed8; --ok: #0f7b3d; --warn: #8a5a00; --bad: #b42318;
+    --ok-bg: #e7f5ec; --warn-bg: #fdf3e0; --bad-bg: #fdecea; --info-bg: #e8eefc; --neutral-bg: #eef0f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1216; --panel: #161a20; --line: #262c35; --ink: #e7eaee; --muted: #949caa;
+      --accent: #7aa2ff; --ok: #5bd48a; --warn: #e3b25c; --bad: #ff8d82;
+      --ok-bg: #12301f; --warn-bg: #332714; --bad-bg: #3a1c1a; --info-bg: #1a2338; --neutral-bg: #1e242c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1216; --panel: #161a20; --line: #262c35; --ink: #e7eaee; --muted: #949caa;
+    --accent: #7aa2ff; --ok: #5bd48a; --warn: #e3b25c; --bad: #ff8d82;
+    --ok-bg: #12301f; --warn-bg: #332714; --bad-bg: #3a1c1a; --info-bg: #1a2338; --neutral-bg: #1e242c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .muted { color: var(--muted); }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap;
+  }
+  header h1 { font-size: 15px; margin: 0; font-weight: 650; letter-spacing: .01em; }
+  .grow { flex: 1; }
+  nav { display: flex; gap: 2px; padding: 0 16px; background: var(--panel);
+        border-bottom: 1px solid var(--line); overflow-x: auto; }
+  nav button {
+    border: 0; background: none; color: var(--muted); padding: 10px 12px; cursor: pointer;
+    font: inherit; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  main { padding: 16px; max-width: 1400px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .filters { display: flex; gap: 8px; padding: 12px; flex-wrap: wrap; align-items: center;
+             border-bottom: 1px solid var(--line); }
+  input, select, button.btn {
+    font: inherit; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px;
+  }
+  button.btn { cursor: pointer; }
+  button.btn:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:disabled { opacity: .55; cursor: not-allowed; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.nowrap { white-space: nowrap; }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600;
+          background: var(--neutral-bg); }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); }
+  .chip.warn { background: var(--warn-bg); color: var(--warn); }
+  .chip.bad { background: var(--bad-bg); color: var(--bad); }
+  .chip.info { background: var(--info-bg); color: var(--accent); }
+  .empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+  .tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 16px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .tile .n { font-size: 24px; font-weight: 680; letter-spacing: -.01em; }
+  .tile .l { font-size: 12px; color: var(--muted); }
+  .banner { padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+  .banner.bad { background: var(--bad-bg); color: var(--bad); }
+  .banner.info { background: var(--info-bg); color: var(--accent); }
+  .signin { max-width: 420px; margin: 48px auto; }
+  .signin .card { padding: 20px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .field input { width: 100%; }
+  .captcha { display: flex; gap: 10px; align-items: center; }
+  .captcha img { border-radius: 6px; border: 1px solid var(--line); }
+  .sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  @media (max-width: 760px) { th.hide-sm, td.hide-sm { display: none; } main { padding: 10px; } }
+</style>
+</head>
+<body>
+
+<div id="signin" class="signin" hidden>
+  <div class="card">
+    <h1 style="margin:0 0 4px;font-size:17px">APIM Local Console</h1>
+    <p class="muted" style="margin:0 0 16px;font-size:13px">
+      Signs in against the control plane on this machine. Codes appear on screen while outbound mail is blocked.
+    </p>
+    <div id="signinError" class="banner bad" hidden></div>
+    <div id="stepEmail">
+      <div class="field"><label for="email">Work e-mail</label>
+        <input id="email" type="email" autocomplete="username" placeholder="you@example.in" /></div>
+      <div class="field"><label for="captchaAnswer">Characters in the image</label>
+        <div class="captcha">
+          <img id="captchaImg" alt="CAPTCHA" width="190" height="60" />
+          <div style="flex:1">
+            <input id="captchaAnswer" autocomplete="off" placeholder="5 characters" style="width:100%" />
+            <button class="btn" id="newCaptcha" type="button" style="margin-top:6px;font-size:12px">New image</button>
+          </div>
+        </div>
+      </div>
+      <button class="btn primary" id="sendCode" style="width:100%">Send one-time code</button>
+    </div>
+    <div id="stepCode" hidden>
+      <div id="devCode" class="banner info" hidden></div>
+      <div class="field"><label for="code">One-time code</label>
+        <input id="code" inputmode="numeric" autocomplete="one-time-code" placeholder="6 digits" /></div>
+      <button class="btn primary" id="verify" style="width:100%">Sign in</button>
+      <button class="btn" id="startOver" style="width:100%;margin-top:8px">Use a different address</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <h1>APIM Local Console</h1>
+    <span class="chip info" id="apiBadge"></span>
+    <div class="grow"></div>
+    <span class="muted" id="whoami"></span>
+    <button class="btn" id="theme" title="Light or dark">◐</button>
+    <button class="btn" id="signout">Sign out</button>
+  </header>
+  <nav id="tabs"></nav>
+  <main>
+    <div id="error" class="banner bad" hidden></div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<script>
+// Served from the control plane itself, so API calls are same-origin and need no CORS. Opened
+// straight off disk (file://) there is no origin to share, so it falls back to the published
+// loopback port — which needs LOCAL_UI_CORS=true on the backend.
+const API = location.protocol === "file:" ? "http://127.0.0.1:18090" : "";
+const TOKEN_KEY = "apim.local.token";
+
+const el = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let token = sessionStorage.getItem(TOKEN_KEY) || "";
+let me = null;
+
+async function api(path, options = {}) {
+  const res = await fetch(API + path, {
+    ...options,
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: "Bearer " + token } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const text = await res.text();
+  let body = null;
+  try { body = text ? JSON.parse(text) : null; } catch { body = text; }
+  if (!res.ok) {
+    // The platform answers with an RFC 9457 problem document; `detail` is the sentence to show.
+    const message = (body && (body.detail || body.title)) || res.statusText || "Request failed";
+    const err = new Error(message);
+    err.status = res.status;
+    err.code = body && body.code;
+    throw err;
+  }
+  return body;
+}
+
+// ---------------------------------------------------------------- sign in
+
+async function newCaptcha() {
+  const c = await api("/api/auth/captcha", { method: "POST" });
+  el("captchaImg").src = c.image;
+  el("captchaImg").dataset.id = c.challengeId;
+}
+
+function showSignInError(message) {
+  const box = el("signinError");
+  box.textContent = message;
+  box.hidden = !message;
+}
+
+el("newCaptcha").onclick = () => newCaptcha().catch((e) => showSignInError(e.message));
+
+el("sendCode").onclick = async () => {
+  showSignInError("");
+  el("sendCode").disabled = true;
+  try {
+    const out = await api("/api/auth/otp/request", {
+      method: "POST",
+      body: JSON.stringify({
+        email: el("email").value.trim(),
+        captchaId: el("captchaImg").dataset.id,
+        captchaAnswer: el("captchaAnswer").value.trim(),
+      }),
+    });
+    el("stepEmail").hidden = true;
+    el("stepCode").hidden = false;
+    if (out.devCode) {
+      el("devCode").textContent = "Your code is " + out.devCode + " — shown here because no mail server is reachable.";
+      el("devCode").hidden = false;
+    }
+    el("code").focus();
+  } catch (e) {
+    showSignInError(e.message);
+    await newCaptcha().catch(() => {});   // a CAPTCHA is single use, solved or not
+    el("captchaAnswer").value = "";
+  } finally {
+    el("sendCode").disabled = false;
+  }
+};
+
+el("verify").onclick = async () => {
+  showSignInError("");
+  el("verify").disabled = true;
+  try {
+    const session = await api("/api/auth/otp/verify", {
+      method: "POST",
+      body: JSON.stringify({ email: el("email").value.trim(), code: el("code").value.trim() }),
+    });
+    token = session.token;
+    sessionStorage.setItem(TOKEN_KEY, token);
+    await start();
+  } catch (e) {
+    showSignInError(e.message);
+  } finally {
+    el("verify").disabled = false;
+  }
+};
+
+el("startOver").onclick = () => {
+  el("stepCode").hidden = true;
+  el("stepEmail").hidden = false;
+  el("devCode").hidden = true;
+  el("code").value = "";
+  newCaptcha().catch(() => {});
+};
+
+el("signout").onclick = () => {
+  sessionStorage.removeItem(TOKEN_KEY);
+  token = "";
+  location.reload();
+};
+
+el("theme").onclick = () => {
+  const now = document.documentElement.getAttribute("data-theme");
+  const next = now === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("apim.local.theme", next); } catch { /* private mode */ }
+};
+try {
+  const saved = localStorage.getItem("apim.local.theme");
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+} catch { /* private mode: the media query still applies */ }
+
+// ---------------------------------------------------------------- helpers
+
+const when = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: "short", timeStyle: "medium" }) : "—");
+const toLocalInput = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+const fromLocalInput = (v) => { const d = new Date(v); return isNaN(d) ? null : d.toISOString(); };
+
+const WINDOWS = [
+  ["1h", "Last hour", 60], ["24h", "Last 24 hours", 1440], ["7d", "Last 7 days", 10080],
+  ["30d", "Last 30 days", 43200], ["all", "All time", 0], ["custom", "Custom range…", 0],
+];
+
+/** The shared date-range control: presets plus two datetime inputs, used by every log view. */
+function rangeControls(state, rerun) {
+  const wrap = document.createElement("div");
+  wrap.style.display = "contents";
+
+  const select = document.createElement("select");
+  WINDOWS.forEach(([key, label]) => select.add(new Option(label, key)));
+  select.value = state.windowKey;
+  select.onchange = () => { state.windowKey = select.value; rerun(); };
+  wrap.append(select);
+
+  if (state.windowKey === "custom") {
+    const from = document.createElement("input");
+    from.type = "datetime-local"; from.value = state.from; from.max = state.to;
+    from.onchange = () => { state.from = from.value; rerun(); };
+    const sep = document.createElement("span");
+    sep.className = "muted"; sep.textContent = "to";
+    const to = document.createElement("input");
+    to.type = "datetime-local"; to.value = state.to; to.min = state.from;
+    to.onchange = () => { state.to = to.value; rerun(); };
+    wrap.append(from, sep, to);
+  }
+  return wrap;
+}
+
+function rangeQuery(state) {
+  if (state.windowKey === "custom") {
+    return { from: fromLocalInput(state.from), to: fromLocalInput(state.to) };
+  }
+  const minutes = (WINDOWS.find((w) => w[0] === state.windowKey) || [])[2] || 0;
+  if (!minutes) return { from: null, to: null };
+  const now = Math.floor(Date.now() / 60000) * 60000;
+  return { from: new Date(now - minutes * 60000).toISOString(), to: null };
+}
+
+function newRangeState(windowKey = "7d") {
+  return {
+    windowKey,
+    from: toLocalInput(new Date(Date.now() - 86400000)),
+    to: toLocalInput(new Date()),
+  };
+}
+
+function table(columns, rows, renderRow) {
+  if (!rows.length) return '<div class="empty">Nothing matches these filters.</div>';
+  return `<table><thead><tr>${columns.map((c) => `<th${c.cls ? ` class="${c.cls}"` : ""}${c.w ? ` style="width:${c.w}"` : ""}>${esc(c.label)}</th>`).join("")}</tr></thead>`
+    + `<tbody>${rows.map(renderRow).join("")}</tbody></table>`;
+}
+
+function showError(e) {
+  const box = el("error");
+  box.textContent = e ? (e.message || String(e)) : "";
+  box.hidden = !e;
+}
+
+// ---------------------------------------------------------------- views
+
+const views = {};
+
+views.dashboard = {
+  label: "Dashboard",
+  async render(host) {
+    const d = await api("/api/admin/dashboard?window=PT24H");
+    const c = d.counts, w = d.lastHour;
+    host.innerHTML = `
+      <div class="tiles">
+        ${[["APIs", c.apis], ["Active", c.activeApis], ["Draft", c.draftApis], ["Disabled", c.disabledApis],
+           ["Partners", c.partners], ["Production", c.productionPartners], ["Portal users", c.partnerUsers]]
+          .map(([l, n]) => `<div class="tile"><div class="n">${n}</div><div class="l">${l}</div></div>`).join("")}
+      </div>
+      <div class="tiles">
+        ${[["Successful calls", w.success], ["Failed", w.failed],
+           ["Success rate", w.successRate + "%"], ["Average latency", (w.avgLatencyMs ?? 0) + " ms"]]
+          .map(([l, n]) => `<div class="tile"><div class="n">${n}</div><div class="l">${l} · last 24h</div></div>`).join("")}
+      </div>
+      <div class="card">
+        <div class="filters"><strong>Busiest APIs</strong><span class="muted">last 24 hours</span></div>
+        ${table([{ label: "API" }, { label: "Path", cls: "hide-sm" }, { label: "Success" }, { label: "Failed" },
+                 { label: "Rate" }, { label: "Avg", cls: "hide-sm" }], d.topApis,
+          (a) => `<tr><td>${esc(a.apiName)}</td><td class="mono muted hide-sm">${esc(a.proxyPath ?? "")}</td>
+            <td>${a.success}</td><td>${a.failed}</td><td>${a.successRate}%</td>
+            <td class="hide-sm">${a.avgLatencyMs ?? "—"} ms</td></tr>`)}
+      </div>`;
+  },
+};
+
+views.apis = {
+  label: "APIs",
+  async render(host) {
+    const rows = await api("/api/admin/apis");
+    const tone = { ACTIVE: "ok", DRAFT: "info", DISABLED: "warn" };
+    host.innerHTML = `<div class="card">${table(
+      [{ label: "Name" }, { label: "Method", w: "90px" }, { label: "Path" }, { label: "Status", w: "110px" },
+       { label: "Rate limit", cls: "hide-sm" }, { label: "Category", cls: "hide-sm" }], rows,
+      (a) => `<tr><td>${esc(a.name)}<div class="sub">${esc(a.ownerTeam ?? "")}</div></td>
+        <td><span class="chip">${esc(a.httpMethod)}</span></td>
+        <td class="mono">${esc(a.proxyPath)}</td>
+        <td><span class="chip ${tone[a.status] || ""}">${esc(a.status)}</span></td>
+        <td class="hide-sm">${a.rateLimitCount} / ${esc(a.rateLimitWindow.toLowerCase())}</td>
+        <td class="hide-sm muted">${esc(a.category)}</td></tr>`)}</div>`;
+  },
+};
+
+views.partners = {
+  label: "Partners",
+  async render(host) {
+    const rows = await api("/api/admin/partners");
+    host.innerHTML = `<div class="card">${table(
+      [{ label: "Organization" }, { label: "Code", w: "110px" }, { label: "Tier", w: "130px" },
+       { label: "Status", w: "100px" }, { label: "Client IDs", cls: "hide-sm" }, { label: "Signature", cls: "hide-sm" }],
+      rows,
+      (p) => `<tr><td>${esc(p.name)}<div class="sub">${esc(p.contactEmail ?? "")}</div></td>
+        <td class="mono">${esc(p.code)}</td>
+        <td><span class="chip ${p.accessTier === "PRODUCTION" ? "ok" : ""}">${esc(p.accessTier.replace("_", " "))}</span></td>
+        <td><span class="chip ${p.status === "ACTIVE" ? "ok" : "warn"}">${esc(p.status)}</span></td>
+        <td class="mono hide-sm" style="font-size:11.5px">${esc(p.clientIdSandbox)}
+          ${p.clientIdProduction ? `<div>${esc(p.clientIdProduction)}</div>` : ""}</td>
+        <td class="mono muted hide-sm" style="font-size:11px">${esc((p.signatureFingerprint ?? "").slice(0, 26))}</td></tr>`)}</div>`;
+  },
+};
+
+views.audit = {
+  label: "Audit log",
+  state: { range: newRangeState("7d"), actor: "", search: "" },
+  async render(host) {
+    const s = this.state;
+    const { from, to } = rangeQuery(s.range);
+    const q = new URLSearchParams({ limit: "500" });
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    if (s.actor) q.set("actor", s.actor);
+    if (s.search.trim()) q.set("search", s.search.trim());
+
+    const [rows, actors] = await Promise.all([
+      api("/api/admin/audit?" + q), api("/api/admin/audit/actors"),
+    ]);
+    const tone = { CREATE: "ok", ENABLE: "ok", GENERATE: "info", UPDATE: "info",
+                   ACCESS_TIER: "warn", DISABLE: "warn", REVOKE: "bad", DELETE: "bad" };
+
+    host.innerHTML = `<div class="card"><div class="filters" id="auditFilters"></div>
+      ${table([{ label: "When", w: "165px" }, { label: "User" }, { label: "Action", w: "130px" },
+               { label: "Object", cls: "hide-sm" }, { label: "Detail" }], rows,
+        (a) => `<tr><td class="mono muted nowrap" style="font-size:11.5px">${esc(when(a.occurredAt))}</td>
+          <td>${esc(a.actor)}<div class="sub">${esc((a.actorRole ?? "").toLowerCase())}</div></td>
+          <td><span class="chip ${tone[a.action] || ""}">${esc(a.action.replace(/_/g, " "))}</span></td>
+          <td class="muted hide-sm">${esc(a.objectType.replace(/_/g, " ").toLowerCase())}</td>
+          <td class="muted">${esc(a.detail ?? "")}</td></tr>`)}</div>
+      <p class="muted" style="font-size:12px">Portal actions only. A security key belongs to an
+      organization rather than a person, so partner API calls are attributed to a Client ID, not a user.</p>`;
+
+    const bar = el("auditFilters");
+    bar.append(rangeControls(s.range, () => run("audit")));
+    const who = document.createElement("select");
+    who.add(new Option("All users", ""));
+    if (me && actors.some((a) => a.actor.toLowerCase() === me.username.toLowerCase())) {
+      who.add(new Option("Me (" + me.username + ")", me.username));
+    }
+    actors.filter((a) => !me || a.actor.toLowerCase() !== me.username.toLowerCase())
+      .forEach((a) => who.add(new Option(`${a.actor} (${a.entries})`, a.actor)));
+    who.value = s.actor;
+    who.onchange = () => { s.actor = who.value; run("audit"); };
+    const search = document.createElement("input");
+    search.placeholder = "Search detail or object"; search.value = s.search;
+    search.onchange = () => { s.search = search.value; run("audit"); };
+    const spacer = document.createElement("div");
+    spacer.style.flex = "1";
+    bar.append(who, spacer, search);
+    bar.append(Object.assign(document.createElement("span"),
+      { className: "muted", textContent: rows.length + " entries" }));
+  },
+};
+
+views.errors = {
+  label: "System errors",
+  state: { range: newRangeState("7d"), source: "", partnerId: "", search: "" },
+  async render(host) {
+    const s = this.state;
+    const { from, to } = rangeQuery(s.range);
+    const q = new URLSearchParams({ limit: "300" });
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    if (s.source) q.set("source", s.source);
+    if (s.partnerId) q.set("partnerId", s.partnerId);
+    if (s.search.trim()) q.set("search", s.search.trim());
+
+    const [rows, partners] = await Promise.all([
+      api("/api/admin/errors?" + q), api("/api/admin/partners"),
+    ]);
+    const tone = { SMTP: "warn", GATEWAY: "bad", SCHEDULER: "info", API: "bad" };
+
+    host.innerHTML = `<div class="card"><div class="filters" id="errFilters"></div>
+      ${table([{ label: "When", w: "165px" }, { label: "Source", w: "100px" }, { label: "Partner", w: "160px" },
+               { label: "Code", w: "160px" }, { label: "Message" }, { label: "Reference", cls: "hide-sm" }], rows,
+        (e) => `<tr><td class="mono muted nowrap" style="font-size:11.5px">${esc(when(e.occurredAt))}</td>
+          <td><span class="chip ${tone[e.source] || ""}">${esc(e.source)}</span></td>
+          <td>${e.partnerName ? esc(e.partnerName) + `<div class="sub mono">${esc(e.partnerCode)}</div>`
+                              : '<span class="muted">Platform</span>'}</td>
+          <td class="mono" style="font-size:11.5px">${esc(e.code)}</td>
+          <td>${esc(e.message)}<div class="sub">${esc([e.request, e.actor].filter(Boolean).join(" · "))}</div></td>
+          <td class="mono muted hide-sm" style="font-size:11px">${esc(e.reference)}</td></tr>`)}</div>`;
+
+    const bar = el("errFilters");
+    bar.append(rangeControls(s.range, () => run("errors")));
+    const src = document.createElement("select");
+    [["", "All sources"], ["API", "API"], ["GATEWAY", "Gateway"], ["SMTP", "Mail"], ["SCHEDULER", "Scheduler"]]
+      .forEach(([v, l]) => src.add(new Option(l, v)));
+    src.value = s.source;
+    src.onchange = () => { s.source = src.value; run("errors"); };
+    const origin = document.createElement("select");
+    origin.add(new Option("Any origin", ""));
+    origin.add(new Option("Platform only (no partner)", "none"));
+    partners.forEach((p) => origin.add(new Option(`${p.name} · ${p.code}`, p.id)));
+    origin.value = s.partnerId;
+    origin.onchange = () => { s.partnerId = origin.value; run("errors"); };
+    const search = document.createElement("input");
+    search.placeholder = "Search message, code or reference"; search.value = s.search;
+    search.onchange = () => { s.search = search.value; run("errors"); };
+    const spacer = document.createElement("div");
+    spacer.style.flex = "1";
+    bar.append(src, origin, spacer, search);
+  },
+};
+
+views.usage = {
+  label: "API logs",
+  state: { range: newRangeState("24h"), status: "ALL", search: "" },
+  async render(host) {
+    const s = this.state;
+    const { from, to } = rangeQuery(s.range);
+    const q = new URLSearchParams({ limit: "300" });
+    if (from) q.set("from", from);
+    if (to) q.set("to", to);
+    if (s.status !== "ALL") q.set("status", s.status);
+    if (s.search.trim()) q.set("search", s.search.trim());
+
+    const rows = await api("/api/admin/usage/logs?" + q);
+    host.innerHTML = `<div class="card"><div class="filters" id="useFilters"></div>
+      ${table([{ label: "When", w: "165px" }, { label: "API" }, { label: "Partner", cls: "hide-sm" },
+               { label: "Env", w: "110px" }, { label: "Status", w: "90px" }, { label: "Latency", w: "95px" }], rows,
+        (r) => `<tr><td class="mono muted nowrap" style="font-size:11.5px">${esc(when(r.occurredAt))}</td>
+          <td>${esc(r.apiName ?? "—")}<div class="sub mono">${esc(r.httpMethod ?? "")} ${esc(r.proxyPath ?? "")}</div></td>
+          <td class="hide-sm">${esc(r.partnerName ?? "—")}<div class="sub mono">${esc(r.clientId ?? "")}</div></td>
+          <td><span class="chip">${esc(r.environment ?? "—")}</span></td>
+          <td><span class="chip ${r.statusCode >= 500 ? "bad" : r.statusCode >= 400 ? "warn" : "ok"}">${r.statusCode}</span></td>
+          <td>${r.latencyMs} ms</td></tr>`)}</div>`;
+
+    const bar = el("useFilters");
+    bar.append(rangeControls(s.range, () => run("usage")));
+    const st = document.createElement("select");
+    [["ALL", "All statuses"], ["SUCCESS", "Success"], ["ERROR", "All errors"],
+     ["CLIENT_ERROR", "Client errors"], ["SERVER_ERROR", "Server errors"]]
+      .forEach(([v, l]) => st.add(new Option(l, v)));
+    st.value = s.status;
+    st.onchange = () => { s.status = st.value; run("usage"); };
+    const search = document.createElement("input");
+    search.placeholder = "Search API name or path"; search.value = s.search;
+    search.onchange = () => { s.search = search.value; run("usage"); };
+    const spacer = document.createElement("div");
+    spacer.style.flex = "1";
+    bar.append(st, spacer, search);
+    bar.append(Object.assign(document.createElement("span"),
+      { className: "muted", textContent: rows.length + " calls" }));
+  },
+};
+
+// ---------------------------------------------------------------- shell
+
+let current = "dashboard";
+
+async function run(name) {
+  current = name;
+  [...el("tabs").children].forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === name)));
+  showError(null);
+  const host = el("view");
+  host.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    await views[name].render(host);
+  } catch (e) {
+    if (e.status === 401) return signOutToLogin();
+    host.innerHTML = "";
+    showError(e);
+  }
+}
+
+function signOutToLogin() {
+  sessionStorage.removeItem(TOKEN_KEY);
+  token = "";
+  el("app").hidden = true;
+  el("signin").hidden = false;
+  newCaptcha().catch((e) => showSignInError(e.message));
+}
+
+async function start() {
+  me = await api("/api/auth/me");
+  el("signin").hidden = true;
+  el("app").hidden = false;
+  el("whoami").textContent = me.username + " · " + (me.roles || []).join(", ");
+  el("apiBadge").textContent = API || location.host;
+  const tabs = el("tabs");
+  tabs.innerHTML = "";
+  Object.entries(views).forEach(([key, v]) => {
+    const b = document.createElement("button");
+    b.textContent = v.label;
+    b.dataset.view = key;
+    b.onclick = () => run(key);
+    tabs.append(b);
+  });
+  await run(current);
+}
+
+(async () => {
+  if (token) {
+    try { await start(); return; } catch { /* expired or rejected: fall through to sign-in */ }
+  }
+  signOutToLogin();
+})();
+</script>
+</body>
+</html>

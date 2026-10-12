@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     auth_jwt_secret: str = Field(default="", alias="AUTH_JWT_SECRET")
 
     # 32 random bytes, base64. Empty outside production falls back to the same built-in development
-    # key backend-java uses, which is what lets either service read the other'''s stored secrets.
+    # key backend-java uses, which is what lets either service read the other's stored secrets.
     crypto_master_key: str = Field(default="", alias="CRYPTO_MASTER_KEY")
 
     # Shared with the APISIX gateways, which present it on every usage batch. Not a session token.
@@ -43,6 +43,10 @@ class Settings(BaseSettings):
         default="http://sandbox-api.apigw.com:9080", alias="PUBLIC_SANDBOX_URL"
     )
     try_it_mode: str = Field(default="GATEWAY", alias="TRY_IT_MODE")
+
+    # Opens the API to any origin, so the local console works when opened straight off disk rather
+    # than from /ui. Off by default, and ignored under the production profile.
+    local_ui_cors: bool = Field(default=False, alias="LOCAL_UI_CORS")
 
     # --- security keys. CP-SEC-04: the previous key stays valid this long after a rotation.
     key_overlap_minutes: int = Field(default=20, alias="KEY_OVERLAP_MINUTES")

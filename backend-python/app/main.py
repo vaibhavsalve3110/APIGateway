@@ -7,10 +7,13 @@ serve the portals side by side while routes move across one at a time.
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -72,6 +75,34 @@ app.include_router(partner_portal.router)
 app.include_router(partner_users.router)
 app.include_router(products.router)
 app.include_router(usage.router)
+
+# --------------------------------------------------------------------------- the local console
+#
+# A single HTML file served from this service, so it is same-origin with the API: no CORS, no TLS, no
+# hosts-file entries and no certificate to trust. Open http://127.0.0.1:18090/ui.
+#
+# Never mounted under the production profile. It is a developer tool, and an admin console reachable
+# on the control plane's own port is not something to ship by accident.
+_settings = get_settings()
+if _settings.environment != "production":
+    _console = Path(__file__).parent / "local_ui"
+    if _console.is_dir():
+        app.mount("/ui", StaticFiles(directory=_console, html=True), name="local-ui")
+        log.info("Local console mounted at /ui")
+
+    # Only for opening that same file straight off disk, where the origin is "null" and the browser
+    # would otherwise block every call. Off by default: this allows any page to call the API with
+    # the user's credentials, which is exactly what CORS exists to prevent.
+    if _settings.local_ui_cors:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["*"],
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        log.warning(
+            "LOCAL_UI_CORS is on — any origin may call this API. Development machines only."
+        )
 
 
 def _actor(request: Request) -> str | None:
