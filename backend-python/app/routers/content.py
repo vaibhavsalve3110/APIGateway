@@ -158,6 +158,7 @@ async def _view(conn: AsyncConnection, page_id: uuid.UUID) -> dict[str, Any]:
 
 @router.get("", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
 async def list_pages() -> list[dict[str, Any]]:
+    """Every portal page, ordered as partners see them."""
     async with engine().connect() as conn:
         ids = [
             r.id
@@ -170,6 +171,7 @@ async def list_pages() -> list[dict[str, Any]]:
 
 @router.get("/{page_id}", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
 async def get_page(page_id: uuid.UUID) -> dict[str, Any]:
+    """One page, with its current draft and its version history."""
     async with engine().connect() as conn:
         return await _view(conn, page_id)
 
@@ -178,6 +180,7 @@ async def get_page(page_id: uuid.UUID) -> dict[str, Any]:
 async def create_page(
     request: PageRequest, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> dict[str, Any]:
+    """Add a page. It begins as a draft: partners see nothing until it is published."""
     async with engine().begin() as conn:
         title = request.title.strip()
         page_id = uuid.uuid4()
@@ -296,6 +299,7 @@ async def publish_page(
 async def unpublish_page(
     page_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> dict[str, Any]:
+    """Withdraw a page from the portal. The draft and its history are kept."""
     async with engine().begin() as conn:
         page = await _require(conn, page_id)
         await conn.execute(
@@ -321,6 +325,7 @@ async def unpublish_page(
 async def delete_page(
     page_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> Response:
+    """Remove a page and every version of it."""
     async with engine().begin() as conn:
         page = await _require(conn, page_id)
         if page.status == "PUBLISHED":

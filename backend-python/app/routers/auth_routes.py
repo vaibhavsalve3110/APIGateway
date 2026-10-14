@@ -141,6 +141,7 @@ def _purge_captchas(now: datetime) -> None:
 
 @router.post("/captcha")
 async def issue_captcha() -> dict[str, Any]:
+    """Begin a sign-in: returns a challenge id and a PNG to read, both short-lived."""
     now = datetime.now(UTC)
     _purge_captchas(now)
     answer = "".join(secrets.choice(CAPTCHA_ALPHABET) for _ in range(CAPTCHA_LENGTH))
@@ -234,6 +235,11 @@ def _issue_token(identity: dict[str, Any]) -> tuple[str, datetime]:
 
 @router.post("/otp/request")
 async def request_code(request: CodeRequest, http: Request) -> dict[str, Any]:
+    """Email a one-time code, once the CAPTCHA has been answered correctly.
+
+    Where no mail server is reachable the code is returned as `devCode` instead of being sent, so a
+    developer machine needs no mailbox. Never under the production profile.
+    """
     settings = get_settings()
     client_ip = _client_ip(http)
 
@@ -334,6 +340,11 @@ If you did not ask to sign in, ignore this message and tell your administrator.
 
 @router.post("/otp/verify")
 async def verify_code(request: VerifyRequest, http: Request) -> dict[str, Any]:
+    """Exchange a one-time code for a session token.
+
+    The token is an HS256 JWT that backend-java accepts as well: both services sign with the same secret, so
+    the session survives whichever one answers the next request.
+    """
     settings = get_settings()
     client_ip = _client_ip(http)
     email = _normalise(request.email)
@@ -408,6 +419,7 @@ async def verify_code(request: VerifyRequest, http: Request) -> dict[str, Any]:
 
 @router.get("/me")
 async def me(principal: Principal = Depends(current_principal)) -> dict[str, Any]:
+    """Who the presented token belongs to, and what it permits."""
     return {
         "username": principal.username,
         "roles": sorted(principal.roles),

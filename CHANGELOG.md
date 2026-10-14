@@ -7,6 +7,70 @@ Database changes are Flyway migrations in `backend/src/main/resources/db/migrati
 in order, and are recorded in `apim.flyway_schema_history`. The one-time PostgreSQL setup script is
 `infra/postgres/local-setup.sql`.
 
+## 2026-10-14
+
+### The API reference describes the API
+
+`backend-python` has served a Swagger UI since it was created, and that page listed 71 operations
+while describing the response of none of them. It had no **Authorize** button either, so nothing on
+it could be tried. The document now carries a response schema, prose and a security scheme for every
+operation.
+
+- **New `backend-python/app/schemas.py`** — 60 models for what each endpoint returns: the catalogue
+  and partner views, keys, products, portal pages, usage and audit rows, the dashboards, the
+  sign-in exchange, and the RFC 9457 `Problem` every error uses.
+- **New `backend-python/app/openapi_doc.py`** — attaches those models to the document *after*
+  FastAPI generates it, keyed by method and path. **Deliberately not `response_model`:** that would
+  make FastAPI filter every response through a model, and a model with one field missing would then
+  drop that field from real responses. This service has to answer byte-for-byte as the Java one
+  does, so the handlers are left alone and the document is corrected to match them. Also declares
+  the bearer scheme (and a separate one for the gateways' ingest token), replaces FastAPI's default
+  422 with the 400 this service actually answers, and documents the problem document on every
+  operation.
+- **53 handler docstrings**, which is where the prose on each operation comes from. Additions only:
+  no executable line changed in any router.
+- **New gate `backend-python/tests/check_openapi.py`** — the cost of enriching the document outside
+  the framework is that nothing notices when a route is added or renamed and the registry is not.
+  This does: it fails if a route has no entry, if an entry names a route that no longer exists, if a
+  `$ref` dangles, if an operation lacks a described response or prose, or if a public route is
+  marked as needing a session. It needs nothing running.
+
+**nginx now serves the Python document** at `/swagger-ui.html` and `/v3/api-docs`, where it served
+the Java one before. The springdoc document names controllers rather than resources and describes no
+response bodies, so it was the poorer of the two to put in front of a reader; it stays reachable at
+`/v3/api-docs-java`, and its own UI at `/swagger-ui/`, because it remains the authority on the
+routes Java still owns. Worth knowing when trying a call from that page: the request goes back
+through nginx, so the migration switch decides which service answers it.
+
+**Removed the last `upstream` block.** It was only used by those two docs locations. A hostname
+inside an `upstream` is resolved when the config loads and then held for the life of the process,
+which is what produced 502s after a container rebuild; every `proxy_pass` in the file now goes
+through a variable and resolves per request.
+
+### A gate that had been failing since Phase 4
+
+`tests/check_partner_writes.py` asserted that Python answers `501 NOT_MIGRATED` when asked to
+withdraw production access or disable an organization. Both were ported in commit `95961b9`, the
+same commit that shipped those assertions, and `NOT_MIGRATED` appears nowhere in the service — so
+the gate could not have passed since the code it tests was written.
+
+Both services were probed before the expectations were changed, rather than transcribing whatever
+Python happened to return: they agree exactly — `200`, tier back to `UAT_ONLY`, the production
+Client ID **kept**, then `DISABLED`. The two checks now run each operation against the Java-created
+organization too and compare the results, so this stays a parity check rather than becoming a record
+of one service's behaviour. The production Client ID being kept is deliberate and now stated in the
+test: it is the partner's identity at the gateway, and issuing a different one on re-promotion would
+silently break every integration built against it.
+
+**After pulling:** rebuild and restart `backend-python`, then reload nginx — the config is a
+read-only bind mount, so `docker compose exec nginx nginx -s reload` is enough, and a reload that
+appears to do nothing has probably not been applied yet (check with `docker compose logs nginx`
+which upstream served `/v3/api-docs`). The reference is then at
+`https://admin.apigw.com/swagger-ui.html`, or `http://127.0.0.1:18090/swagger-ui.html` to bypass
+the self-signed certificate. Sign in from the page itself: `POST /api/auth/captcha`, then
+`/api/auth/otp/request` — where no mail server is reachable the code comes back as `devCode` — then
+`/api/auth/otp/verify`, and paste the token into **Authorize**.
+
 ## 2026-10-06
 
 ### The backend port moves to Python, on its own branch

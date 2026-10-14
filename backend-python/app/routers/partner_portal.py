@@ -89,6 +89,7 @@ async def partner_me(
     principal: Principal = Depends(current_principal),
     conn: AsyncConnection = Depends(connection),
 ) -> dict[str, Any]:
+    """The signed-in partner's own organization, and what their role allows."""
     partner = await _current_partner(conn, principal)
     user = await _signed_in_user(conn, partner, principal)
     role = user.role if user else None
@@ -151,6 +152,7 @@ async def api_detail(
     principal: Principal = Depends(current_principal),
     conn: AsyncConnection = Depends(connection),
 ) -> dict[str, Any]:
+    """One API as a partner sees it, with the base URL to call and its documentation."""
     partner = await _current_partner(conn, principal)
     row = (
         await conn.execute(
@@ -203,6 +205,7 @@ async def keys(
     principal: Principal = Depends(current_principal),
     conn: AsyncConnection = Depends(connection),
 ) -> list[dict[str, Any]]:
+    """The signed-in partner's own keys."""
     partner = await _current_partner(conn, principal)
     return await list_keys(conn, partner.id)
 
@@ -257,6 +260,7 @@ async def partner_usage(
     principal: Principal = Depends(current_principal),
     conn: AsyncConnection = Depends(connection),
 ) -> dict[str, Any]:
+    """The signed-in partner's own traffic over a window."""
     partner = await _current_partner(conn, principal)
     return await build_report(conn, frm, to, _client_ids(partner))
 
@@ -271,6 +275,7 @@ async def partner_logs(
     principal: Principal = Depends(current_principal),
     conn: AsyncConnection = Depends(connection),
 ) -> list[dict[str, Any]]:
+    """The signed-in partner's own recent calls."""
     partner = await _current_partner(conn, principal)
     return await build_logs(conn, frm, to, status, search, _client_ids(partner), limit)
 
@@ -281,6 +286,7 @@ async def partner_dashboard(
     principal: Principal = Depends(current_principal),
     conn: AsyncConnection = Depends(connection),
 ) -> dict[str, Any]:
+    """What a partner is shown on signing in to the developer portal."""
     partner = await _current_partner(conn, principal)
     span = _parse_window(window) if window else timedelta(hours=24)
     since = datetime.now(UTC) - span
@@ -426,6 +432,7 @@ async def partner_products(
     principal: Principal = Depends(current_principal),
     conn: AsyncConnection = Depends(connection),
 ) -> list[dict[str, Any]]:
+    """Products assigned to the signed-in partner, directly or through their group."""
     partner = await _current_partner(conn, principal)
     return await _visible_products(conn, partner, principal)
 
@@ -436,6 +443,7 @@ async def partner_product(
     principal: Principal = Depends(current_principal),
     conn: AsyncConnection = Depends(connection),
 ) -> dict[str, Any]:
+    """One assigned product. Only its live APIs are listed."""
     partner = await _current_partner(conn, principal)
     for product in await _visible_products(conn, partner, principal):
         if product["slug"] == slug:
@@ -460,6 +468,7 @@ async def partner_pages(conn: AsyncConnection = Depends(connection)) -> list[dic
 async def partner_page(
     slug: str, conn: AsyncConnection = Depends(connection)
 ) -> dict[str, Any]:
+    """A published portal page. Drafts are never served here."""
     row = (
         await conn.execute(
             text(

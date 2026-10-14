@@ -92,6 +92,11 @@ async def ingest(
     request: Request,
     authorization: str | None = Header(default=None),
 ) -> dict[str, int]:
+    """Accept a batch of call records from a gateway.
+
+    An entry that cannot be parsed is skipped rather than failing the batch, so one bad row from a gateway
+    cannot cost the records either side of it. `accepted` counts what was stored.
+    """
     expected = f"Ingest {get_settings().usage_ingest_token}"
     # Constant-time, as MessageDigest.isEqual is on the Java side: a token must not be guessable
     # one character at a time from response timing.

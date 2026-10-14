@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import db
+from . import db, openapi_doc
 from .common import errors
 from .common.problem import ApiException, default_code, problem_response
 from .routers import (
@@ -75,6 +75,10 @@ app.include_router(partner_portal.router)
 app.include_router(partner_users.router)
 app.include_router(products.router)
 app.include_router(usage.router)
+
+# Must come after every router: it reads the finished route table. Describes the response shapes and
+# declares the bearer scheme without touching how any handler answers — see openapi_doc.py.
+openapi_doc.install(app)
 
 # --------------------------------------------------------------------------- the local console
 #

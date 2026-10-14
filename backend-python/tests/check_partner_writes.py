@@ -155,14 +155,46 @@ try:
                           {"accessTier": "PRODUCTION"})
         check("granting it twice is a no-op", code == 200, f"{code} {same}")
 
-        code, problem = call(PYTHON, "PUT", f"/api/admin/partners/{target}/access-tier",
-                             {"accessTier": "UAT_ONLY"})
-        check("python refuses to withdraw production access rather than half-doing it",
-              code == 501 and problem.get("code") == "NOT_MIGRATED", f"{code} {problem}")
-        code, problem = call(PYTHON, "PUT", f"/api/admin/partners/{target}/status",
-                             {"status": "DISABLED"})
-        check("python refuses to disable an organization for the same reason",
-              code == 501 and problem.get("code") == "NOT_MIGRATED", f"{code} {problem}")
+        # Withdrawing production access and disabling an organization were answered with 501
+        # NOT_MIGRATED while they were still Java's alone; these two checks asserted that refusal
+        # and were left behind when the operations were ported in this same phase. What matters now
+        # is not which status comes back but that both services do the same thing, so each is run
+        # against Java's organization too and the results compared.
+        code, withdrawn = call(PYTHON, "PUT", f"/api/admin/partners/{target}/access-tier",
+                               {"accessTier": "UAT_ONLY"})
+        check("python withdraws production access",
+              code == 200 and withdrawn["accessTier"] == "UAT_ONLY", f"{code} {withdrawn}")
+        # Kept deliberately: the Client ID is the partner's identity at the gateway, and reissuing a
+        # different one on re-promotion would silently break every integration built against it.
+        check("withdrawing access keeps the production Client ID",
+              bool(withdrawn.get("clientIdProduction")), repr(withdrawn.get("clientIdProduction")))
+
+        code, disabled = call(PYTHON, "PUT", f"/api/admin/partners/{target}/status",
+                              {"status": "DISABLED"})
+        check("python disables the organization",
+              code == 200 and disabled["status"] == "DISABLED", f"{code} {disabled}")
+
+        if len(created_partners) > 1:
+            java_target = created_partners[0]
+            call(JAVA, "PUT", f"/api/admin/partners/{java_target}/access-tier",
+                 {"accessTier": "PRODUCTION"})
+            code, java_withdrawn = call(JAVA, "PUT", f"/api/admin/partners/{java_target}/access-tier",
+                                        {"accessTier": "UAT_ONLY"})
+            check("java withdraws production access the same way",
+                  code == 200 and java_withdrawn["accessTier"] == "UAT_ONLY"
+                  and bool(java_withdrawn.get("clientIdProduction")), f"{code} {java_withdrawn}")
+            code, java_disabled = call(JAVA, "PUT", f"/api/admin/partners/{java_target}/status",
+                                       {"status": "DISABLED"})
+            check("java disables an organization the same way",
+                  code == 200 and java_disabled["status"] == "DISABLED", f"{code} {java_disabled}")
+            # Same fields, same values, bar the ones that are each organization's own.
+            own = {"id", "code", "name", "contactEmail", "clientIdSandbox", "clientIdProduction",
+                   "createdAt", "signatureFingerprint", "signaturePublicKey", "signatureCreatedAt",
+                   "ipvSaltMasked", "ipvSaltCreatedAt"}
+            shape = [d for d in diff(java_disabled, disabled)
+                     if not any(d.startswith(f".{field}:") for field in own)]
+            check("a withdrawn, disabled organization reads identically on both", not shape,
+                  "; ".join(shape[:5]))
 
         before = psql(f"select signature_fingerprint from partner where id='{target}';")
         code, regenerated = call(PYTHON, "POST", f"/api/admin/partners/{target}/signature")

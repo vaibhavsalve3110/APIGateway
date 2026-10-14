@@ -154,6 +154,7 @@ async def report(
     clientId: str | None = None,  # noqa: N803 - query name matches the Java API
     conn: AsyncConnection = Depends(connection),
 ) -> dict[str, Any]:
+    """Success, failure and latency per API over a window."""
     return await build_report(conn, frm, to, [clientId] if clientId else None)
 
 
@@ -233,6 +234,7 @@ async def logs(
     limit: int = Query(default=200, ge=1, le=1000),
     conn: AsyncConnection = Depends(connection),
 ) -> list[dict[str, Any]]:
+    """Individual calls, newest first."""
     return await build_logs(
         conn, frm, to, status, search, [clientId] if clientId else None, limit
     )

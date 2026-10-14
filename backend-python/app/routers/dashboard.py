@@ -42,6 +42,7 @@ async def dashboard(
     window: str | None = None,
     conn: AsyncConnection = Depends(connection),
 ) -> dict[str, Any]:
+    """Counts, the last hour of traffic, and the busiest APIs and partners."""
     span = _parse_window(window)
     since = datetime.now(UTC) - span
 

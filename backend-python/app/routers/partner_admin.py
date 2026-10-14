@@ -182,6 +182,7 @@ async def _drop_credentials(partner: Any, revoked: list[tuple[str, str]]) -> Non
 async def create_group(
     request: GroupRequest, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> dict[str, Any]:
+    """Add a partner group."""
     async with engine().begin() as conn:
         group_id = uuid.uuid4()
         await conn.execute(
@@ -292,6 +293,7 @@ async def update_partner(
     request: UpdateRequest,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Change a partner organization's details."""
     async with engine().begin() as conn:
         partner = await _require(conn, partner_id)
         before = f"{partner.name} <{partner.contact_email or ''}>"
@@ -318,6 +320,10 @@ async def change_tier(
     request: TierRequest,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Move a partner between sandbox-only and production access.
+
+    Promoting a partner to production issues their production Client ID and credentials.
+    """
     async with engine().begin() as conn:
         partner = await _require(conn, partner_id)
         if partner.access_tier == request.accessTier:
@@ -370,6 +376,7 @@ async def set_status(
     request: StatusRequest,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Suspend or reinstate a partner. Suspending stops their keys working at the gateway."""
     async with engine().begin() as conn:
         partner = await _require(conn, partner_id)
         if partner.status == request.status:
@@ -404,6 +411,10 @@ async def set_status(
 async def regenerate_signature(
     partner_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> dict[str, Any]:
+    """Create a new signing pair for a partner.
+
+    The private key is in the response and is not stored. If it is lost, generate another pair.
+    """
     signature = SignatureKeyMaterial.generate()
     async with engine().begin() as conn:
         partner = await _require(conn, partner_id)
@@ -440,6 +451,11 @@ async def regenerate_signature(
 async def rotate_ipv_salt(
     partner_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> dict[str, Any]:
+    """Issue a new IPV salt for a partner.
+
+    The salt is in the response and is not retrievable in full afterwards; it is stored encrypted and shown
+    masked.
+    """
     salt = IpvSaltMaterial.generate()
     cipher = SecretCipher()
     async with engine().begin() as conn:

@@ -236,6 +236,7 @@ async def generate_key(partner_id: uuid.UUID, environment: str, actor: Principal
 async def admin_list_keys(
     partner_id: uuid.UUID, conn: AsyncConnection = Depends(connection)
 ) -> list[dict[str, Any]]:
+    """Every key issued to a partner, live and ended."""
     await _partner(conn, partner_id)
     return await list_keys(conn, partner_id)
 
@@ -246,6 +247,11 @@ async def admin_generate_key(
     environment: Environment,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Issue a key to a partner on an administrator's behalf.
+
+    The key itself is in the response and is never retrievable again; only a hash is stored. Any key being
+    replaced keeps working until the end of its overlap window.
+    """
     return await generate_key(partner_id, environment, actor)
 
 

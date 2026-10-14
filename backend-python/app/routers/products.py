@@ -263,6 +263,7 @@ async def _require(conn: AsyncConnection, product_id: uuid.UUID) -> Any:
 
 @router.get("", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
 async def list_products() -> list[dict[str, Any]]:
+    """Every product, with its steps and its assignments."""
     async with engine().connect() as conn:
         ids = [
             r.id for r in await conn.execute(text("SELECT id FROM product ORDER BY name ASC"))
@@ -272,6 +273,7 @@ async def list_products() -> list[dict[str, Any]]:
 
 @router.get("/{product_id}", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
 async def get_product(product_id: uuid.UUID) -> dict[str, Any]:
+    """One product."""
     async with engine().connect() as conn:
         return await _view(conn, product_id)
 
@@ -281,6 +283,7 @@ async def create_product(
     request: ProductRequest,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Add a product. It is a draft until published."""
     async with engine().begin() as conn:
         name = request.name.strip()
         steps = await _valid_steps(conn, request.steps)
@@ -324,6 +327,7 @@ async def update_product(
     request: ProductRequest,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Change a product, including the order of its steps."""
     async with engine().begin() as conn:
         existing = await _require(conn, product_id)
         name = request.name.strip()
@@ -411,6 +415,7 @@ async def _set_published(product_id: uuid.UUID, publish: bool, actor: Principal)
 async def publish_product(
     product_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> dict[str, Any]:
+    """Make a product visible to the partners it is assigned to."""
     return await _set_published(product_id, True, actor)
 
 
@@ -418,6 +423,7 @@ async def publish_product(
 async def unpublish_product(
     product_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> dict[str, Any]:
+    """Withdraw a product from the portal. Its assignments are kept."""
     return await _set_published(product_id, False, actor)
 
 
@@ -516,6 +522,7 @@ async def unassign_product(
     assignment_id: uuid.UUID,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Take a product away from one partner."""
     async with engine().begin() as conn:
         product = await _require(conn, product_id)
         assignment = (
@@ -555,6 +562,7 @@ async def unassign_product(
 async def delete_product(
     product_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> Response:
+    """Remove a product and every assignment of it."""
     async with engine().begin() as conn:
         product = await _require(conn, product_id)
         if product.status == "PUBLISHED":

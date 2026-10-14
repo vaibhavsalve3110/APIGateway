@@ -142,6 +142,7 @@ async def list_users(
     partnerId: uuid.UUID | None = None,  # noqa: N803 - query name matches the Java API
     conn: AsyncConnection = Depends(connection),
 ) -> list[dict[str, Any]]:
+    """People across every partner organization."""
     if partnerId is not None:
         await _require_partner(conn, partnerId)
     rows = await conn.execute(
@@ -159,6 +160,7 @@ async def list_users(
 
 @router.get("/partner-users/{user_id}", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
 async def get_user(user_id: uuid.UUID, conn: AsyncConnection = Depends(connection)) -> dict[str, Any]:
+    """One partner user."""
     return await _load(conn, user_id)
 
 
@@ -168,6 +170,7 @@ async def get_user(user_id: uuid.UUID, conn: AsyncConnection = Depends(connectio
 async def list_for_partner(
     partner_id: uuid.UUID, conn: AsyncConnection = Depends(connection)
 ) -> list[dict[str, Any]]:
+    """The people in one partner organization."""
     await _require_partner(conn, partner_id)
     rows = await conn.execute(
         text(
@@ -188,6 +191,10 @@ async def create_user(
     request: CreateRequest,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Add a person to a partner organization.
+
+    The email address is the sign-in identity and must be unique across every organization, not just this one.
+    """
     async with engine().begin() as conn:
         partner = await _require_partner(conn, partner_id)
         if partner.status == "DISABLED":
@@ -239,6 +246,7 @@ async def update_user(
     request: UpdateRequest,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Change a person's name, role or status."""
     async with engine().begin() as conn:
         user = await _require_raw(conn, user_id)
         previous_email = user.email
@@ -283,6 +291,7 @@ async def set_access(
     request: AccessRequest,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Grant or revoke someone's access to the developer portal."""
     async with engine().begin() as conn:
         user = await _require_raw(conn, user_id)
         # Setting the status it already has is a no-op, and must not leave a misleading audit row.
@@ -311,6 +320,7 @@ async def set_access(
 async def delete_user(
     user_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> Response:
+    """Remove a person. What they did stays in the audit trail."""
     async with engine().begin() as conn:
         user = await _require_raw(conn, user_id)
         # Deleting an account that can still sign in would be a silent revocation; make it deliberate.

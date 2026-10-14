@@ -128,12 +128,14 @@ def _partner_view(row: Any) -> dict[str, Any]:
 
 @router.get("/apis")
 async def list_apis(conn: AsyncConnection = Depends(connection)) -> list[dict[str, Any]]:
+    """Every API in the catalogue, whatever its status."""
     result = await conn.execute(text(f"SELECT {_API_COLUMNS} FROM api_definition ORDER BY name ASC"))
     return [_api_view(row) for row in result]
 
 
 @router.get("/apis/{api_id}")
 async def get_api(api_id: str, conn: AsyncConnection = Depends(connection)) -> dict[str, Any]:
+    """One API, with its documentation."""
     result = await conn.execute(
         text(f"SELECT {_API_COLUMNS} FROM api_definition WHERE id = :id"), {"id": api_id}
     )
@@ -145,6 +147,7 @@ async def get_api(api_id: str, conn: AsyncConnection = Depends(connection)) -> d
 
 @router.get("/partner-groups")
 async def list_groups(conn: AsyncConnection = Depends(connection)) -> list[dict[str, Any]]:
+    """Partner groups, each with a count of the organizations in it."""
     result = await conn.execute(
         text(
             """
@@ -169,6 +172,7 @@ async def list_groups(conn: AsyncConnection = Depends(connection)) -> list[dict[
 
 @router.get("/partners")
 async def list_partners(conn: AsyncConnection = Depends(connection)) -> list[dict[str, Any]]:
+    """Every partner organization. Stored secrets come back masked, never in full."""
     result = await conn.execute(
         text(
             f"""SELECT {_PARTNER_COLUMNS}
@@ -182,6 +186,7 @@ async def list_partners(conn: AsyncConnection = Depends(connection)) -> list[dic
 
 @router.get("/partners/{partner_id}")
 async def get_partner(partner_id: str, conn: AsyncConnection = Depends(connection)) -> dict[str, Any]:
+    """One partner organization."""
     result = await conn.execute(
         text(
             f"""SELECT {_PARTNER_COLUMNS}

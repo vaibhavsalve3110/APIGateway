@@ -123,6 +123,7 @@ async def _audit(conn: AsyncConnection, actor: Principal, action: str, api_id: A
 async def create_api(
     request: ApiRequest, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> dict[str, Any]:
+    """Add an API to the catalogue. It starts as a draft and is not reachable until enabled."""
     api_id = uuid.uuid4()
     now = datetime.now(UTC)
     # A new API is ACTIVE unless the caller asked for a draft, matching ApiService.create.
@@ -180,6 +181,7 @@ async def update_api(
     request: ApiRequest,
     actor: Principal = Depends(requires("ADMIN", "EDITOR")),
 ) -> dict[str, Any]:
+    """Change an API's definition. Method and proxy path together must stay unique."""
     async with engine().begin() as conn:
         await _require(conn, api_id)
         await conn.execute(
@@ -272,6 +274,7 @@ async def disable_api(
 async def enable_api(
     api_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
 ) -> dict[str, Any]:
+    """Make a draft or disabled API live, publishing its route to the gateways."""
     async with engine().begin() as conn:
         api = await _require(conn, api_id)
         await conn.execute(
