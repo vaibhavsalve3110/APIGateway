@@ -43,6 +43,15 @@ springdoc:
     path: /swagger-ui.html
 
 apigw:
+  # Hybrid encryption of portal payloads (VAPT). The same private key must be configured for
+  # backend-python: nginx routes portal traffic between the two per method and path, so a payload the
+  # portal encrypted once may arrive at either. Empty outside prod falls back to the development
+  # keypair both services carry; under prod a missing key is fatal.
+  payload:
+    private-key: ${PAYLOAD_PRIVATE_KEY:}
+    # Refuse unencrypted /api requests. Always on under the prod profile whatever this says; off by
+    # default elsewhere so Swagger UI, curl, the parity harness and the gates keep working.
+    encryption-enforced: ${PAYLOAD_ENCRYPTION_ENFORCED:false}
   keys:
     # BRD v1.3, CP-SEC-04: the previous key stays valid for 20 minutes after a new key is generated.
     overlap-window: PT20M

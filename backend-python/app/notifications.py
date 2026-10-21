@@ -107,6 +107,71 @@ def _overlap_sentence(previous_expires_at: datetime | None) -> str:
     )
 
 
+def key_for_admins(
+    *, partner_name: str, partner_code: str, env: str, who: str, client_id: str, plaintext: str, overlap: str
+) -> tuple[str, str]:
+    """The notice carrying the new key, for the Partner Admins who install it."""
+    return (
+        f"Your new {env} security key — {partner_name}",
+        f"""A new {env} security key has been generated for {partner_name} ({partner_code}) {who}.
+
+Client ID : {client_id}
+New key   : {plaintext}
+
+Install it now. {overlap}
+
+This key is shown in this message and in the portal at the moment it was created, and nowhere
+else — the platform keeps only a one-way hash of it and cannot tell you the value again.
+
+If you did not expect this change, contact the APIM Admin team immediately.
+""",
+    )
+
+
+def key_changed_broadcast(
+    *, partner_name: str, partner_code: str, env: str, who: str, overlap: str
+) -> tuple[str, str]:
+    """Told to everyone in the organisation. Deliberately carries no key — only admins get that."""
+    return (
+        f"Security key changed for {partner_name}",
+        f"""The {env} security key for {partner_name} ({partner_code}) was changed {who}.
+
+{overlap}
+
+You are receiving this because you have a Developer Portal account with {partner_name}. The key
+itself is sent only to your Partner Admins; ask them for it if you need it.
+
+If this change was not made by your organisation, contact the APIM Admin team immediately —
+someone may have access to your portal account.
+""",
+    )
+
+
+def rotation_notice_for_platform(
+    *,
+    partner_name: str,
+    partner_code: str,
+    env: str,
+    who: str,
+    client_id: str,
+    masked_key: str,
+    previous: str,
+) -> tuple[str, str]:
+    """So an unexpected rotation is noticed by somebody other than the partner."""
+    return (
+        f"Key rotation: {partner_name} ({partner_code}) — {env}",
+        f"""{partner_name} ({partner_code}) now has a new {env} security key, generated {who}.
+
+Client ID    : {client_id}
+Key          : {masked_key}
+Previous key : {previous}
+
+Every active user of that organisation has been told. If this rotation was not expected,
+check the audit log and contact the partner.
+""",
+    )
+
+
 async def notify_key_generated(
     *,
     partner_id: str,
@@ -153,38 +218,22 @@ async def notify_key_generated(
     everyone = [u.email for u in users]
 
     if partner_admins and settings.email_key_to_admin:
-        await send(
-            partner_admins,
-            f"Your new {env} security key — {partner_name}",
-            f"""A new {env} security key has been generated for {partner_name} ({partner_code}) {who}.
-
-Client ID : {client_id}
-New key   : {plaintext}
-
-Install it now. {overlap}
-
-This key is shown in this message and in the portal at the moment it was created, and nowhere
-else — the platform keeps only a one-way hash of it and cannot tell you the value again.
-
-If you did not expect this change, contact the APIM Admin team immediately.
-""",
+        subject, body = key_for_admins(
+            partner_name=partner_name,
+            partner_code=partner_code,
+            env=env,
+            who=who,
+            client_id=client_id,
+            plaintext=plaintext,
+            overlap=overlap,
         )
+        await send(partner_admins, subject, body)
 
     if everyone:
-        await send(
-            everyone,
-            f"Security key changed for {partner_name}",
-            f"""The {env} security key for {partner_name} ({partner_code}) was changed {who}.
-
-{overlap}
-
-You are receiving this because you have a Developer Portal account with {partner_name}. The key
-itself is sent only to your Partner Admins; ask them for it if you need it.
-
-If this change was not made by your organisation, contact the APIM Admin team immediately —
-someone may have access to your portal account.
-""",
+        subject, body = key_changed_broadcast(
+            partner_name=partner_name, partner_code=partner_code, env=env, who=who, overlap=overlap
         )
+        await send(everyone, subject, body)
 
     if platform_admins:
         previous = (
@@ -192,16 +241,13 @@ someone may have access to your portal account.
             if previous_expires_at is None
             else f"stops working at {_instant(previous_expires_at)}"
         )
-        await send(
-            platform_admins,
-            f"Key rotation: {partner_name} ({partner_code}) — {env}",
-            f"""{partner_name} ({partner_code}) now has a new {env} security key, generated {who}.
-
-Client ID    : {client_id}
-Key          : {masked_key}
-Previous key : {previous}
-
-Every active user of that organisation has been told. If this rotation was not expected,
-check the audit log and contact the partner.
-""",
+        subject, body = rotation_notice_for_platform(
+            partner_name=partner_name,
+            partner_code=partner_code,
+            env=env,
+            who=who,
+            client_id=client_id,
+            masked_key=masked_key,
+            previous=previous,
         )
+        await send(platform_admins, subject, body)

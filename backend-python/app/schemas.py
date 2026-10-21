@@ -450,6 +450,23 @@ class SignedIn(BaseModel):
     partnerCode: str | None  # noqa: N815
 
 
+class PayloadScheme(BaseModel):
+    """How to wrap a payload. Described in the response so a client needs no out-of-band document."""
+
+    cipher: str
+    ivBytes: int  # noqa: N815
+    keyBytes: int  # noqa: N815
+    envelope: dict[str, str]
+    headers: dict[str, str]
+
+
+class PublicKey(BaseModel):
+    kid: str = Field(description="Names this key. Echo it in X-Encrypt-Kid so a rotation is detectable")
+    algorithm: str
+    publicKeyPem: str  # noqa: N815
+    payload: PayloadScheme
+
+
 class ComponentStatus(BaseModel):
     status: str
 

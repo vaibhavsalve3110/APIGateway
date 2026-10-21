@@ -9,6 +9,95 @@ in order, and are recorded in `apim.flyway_schema_history`. The one-time Postgre
 
 ## 2026-10-21
 
+### Portal payloads are encrypted end to end (VAPT)
+
+Every request body and every response between the portals and the platform is now AES-256-GCM under
+a per-request key that the browser wraps with the platform's RSA-2048 public key (RSA-OAEP-SHA256).
+
+    X-Encrypted:   v1
+    X-Encrypt-Kid: which public key was used
+    X-Encrypt-Key: base64( RSA-OAEP-SHA256( 32-byte AES key ) )
+
+    body, and every response:  {"iv": "base64(12 bytes)", "data": "base64(ciphertext||tag)"}
+
+The key travels in a header rather than the body so one code path covers every method: a GET has no
+body to carry it, but its response still has to be encrypted. A reply reuses the request's key with a
+freshly generated IV, so the browser needs no keypair and nothing is stored between requests.
+
+**This is defence-in-depth on top of TLS, and worth describing to an auditor as such.** It keeps
+payloads unreadable in an intercepting proxy, which is how these findings are raised and reproduced.
+It buys nothing against someone who controls the browser: the public key is public, so anyone can
+encrypt, and the page can always read its own cleartext.
+
+Implemented in all three places, because nginx routes portal traffic between the two control planes
+per method and path and the portal cannot tell which one answered:
+
+| | |
+|---|---|
+| `backend-python/app/middleware.py` | raw ASGI middleware, added last so it is outermost |
+| `backend-java/.../PayloadEncryptionFilter.java` | servlet filter at highest precedence, outside the Spring Security chain |
+| `frontend/packages/ui/src/payloadCrypto.ts` | WebCrypto, behind the portals' single `fetch` |
+
+Outermost matters in both directions: a body is decrypted before any route or validator parses it,
+and a response is encrypted *after* the error handling has built its problem document — including
+Spring Security's own 401 and 403 — so an error body does not leak field names and detail in the
+clear. That was the first thing checked and it is the easiest thing to get wrong.
+
+**One keypair serves both services**, since a payload the portal sealed once may arrive at either. It
+is configured rather than generated, and outside production both fall back to the same development
+keypair, committed on purpose and worthless — the same pattern as `AUTH_JWT_SECRET`. Production
+refuses to start without `PAYLOAD_PRIVATE_KEY`.
+
+**Enforcement is on in production and off on a developer machine.** Each service derives it rather
+than trusting the flag — Python from `ENVIRONMENT=production`, Java from the `prod` profile — so a
+deployment cannot accept plaintext because someone left a default alone. Note that the two spell
+"production" differently and both must be set. Locally, a request without the headers is still
+answered in plaintext, which is what keeps Swagger Try-it-out, the local console, `curl`, the parity
+harness and all eleven gates working.
+
+**Query strings are deliberately not encrypted.** Doing so would mean turning every filtered GET into
+a POST, losing REST semantics and caching. Nothing sensitive travels in one today: the filters are
+dates, a status, a partner id and a free-text search. Credentials, keys, salts and personal data are
+all in bodies and responses, which are covered. If a tester insists, moving those GETs to POST is a
+separate piece of work.
+
+Two new gates, because the failure modes here are quiet:
+
+- `backend-python/tests/check_payload_crypto.py` acts as the portal does, then tries what a tester
+  tries: a tampered payload must be refused (it is — GCM authenticates, and a mode that decrypted it
+  anyway would make this decoration), response IVs must never repeat, error bodies must be encrypted,
+  a wrong or stale key must fail readably, and the decrypted body must be identical to what the
+  endpoint returns unencrypted.
+- `infra/tools/check-webcrypto-interop.mjs` covers the one risk the above cannot: `crypto.subtle` is
+  the same API in Node and the browser, and RSA-OAEP's MGF1 digest and GCM's tag placement have to
+  match what Python's `cryptography` and Java's JCE expect. Get that wrong and everything typechecks,
+  every test passes, and the portal fails in the browser with "decryption failed". Both backends
+  check out, for reads, writes and encrypted errors.
+
+Verified: 11 of 11 gates, parity unchanged on 8 endpoints, 22 of 22 stack sanity checks, and the
+WebCrypto interop gate against both services. **Not** verified in a real browser: the Browser pane
+refuses `https://admin.apigw.com` while the dev CA is untrusted, which is still outstanding. The
+interop gate exercises the identical browser API against the live backends, which is the closest
+substitute.
+
+**After pulling:** rebuild everything — `docker compose --profile app up -d --build` — because all
+three pieces changed together. For a real deployment, generate a keypair and set
+`PAYLOAD_PRIVATE_KEY` identically for both backends:
+`openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048`. In the API reference at
+`/swagger-ui.html`, the public-key endpoint and the envelope are documented under **crypto**.
+
+### A gate that had been passing for the wrong reason
+
+Enabling mail (below) broke `check_keys.py`, which read the key-rotation notices out of the container
+log — and the bodies are only logged when no SMTP host is configured. Three of its checks survived
+because the subject appears in the "Notification … sent to" line, but **"the broadcast carries no
+key" started passing against a log line that never contained the body at all.** A security assertion
+that cannot fail is worse than none.
+
+The notice bodies are now built by named functions in `notifications.py`, and the gate asserts
+against those rather than against log text. It no longer depends on whether mail is configured, and
+it gained the opposite check: the admins' notice *does* carry the key and says it is shown only once.
+
 ### Mail works: sign-in codes and key notices are sent again
 
 Three separate causes, found in this order:

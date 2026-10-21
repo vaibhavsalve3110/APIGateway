@@ -34,6 +34,10 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // The payload encryption public key. Necessarily open: a client cannot encrypt
+                        // its first request until it has this, and has no session yet either. A public
+                        // key is public, and publishing it is what lets a browser use it.
+                        .requestMatchers(HttpMethod.GET, "/api/crypto/public-key").permitAll()
                         // Sign-in: CAPTCHA and one-time code. Throttled inside OtpService.
                         .requestMatchers("/api/auth/captcha", "/api/auth/otp/**").permitAll()
                         .requestMatchers("/api/auth/me").authenticated()

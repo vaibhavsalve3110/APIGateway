@@ -8,7 +8,24 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /** Platform settings bound from the {@code apigw.*} block of application.yml. */
 @ConfigurationProperties("apigw")
 public record ApigwProperties(Keys keys, Apis apis, Usage usage, Security security, Gateway gateway, TryIt tryIt,
-                              Crypto crypto, Auth auth) {
+                              Crypto crypto, Auth auth, Payload payload) {
+
+    /**
+     * Hybrid encryption of portal request and response payloads (VAPT).
+     *
+     * <p><strong>backend-python must hold the same private key</strong>: nginx routes portal traffic
+     * between the two services per method and path, so a payload the portal encrypted once may arrive
+     * at either. Required under the prod profile; outside it both services fall back to the same
+     * built-in development keypair.
+     *
+     * @param privateKey          unencrypted PKCS#8 RSA private key, PEM, 2048-bit or stronger
+     * @param encryptionEnforced  refuse unencrypted {@code /api} requests. Always on under prod
+     *                            whatever this says; off by default elsewhere so Swagger UI, curl and
+     *                            the test gates keep working
+     * @see com.apigw.platform.crypto.PayloadCrypto
+     */
+    public record Payload(String privateKey, boolean encryptionEnforced) {
+    }
 
     /**
      * Sign-in: a CAPTCHA, then a one-time code by e-mail (no passwords are held by the platform).

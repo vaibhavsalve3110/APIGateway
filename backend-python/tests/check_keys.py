@@ -22,7 +22,10 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from parity import _token, diff  # noqa: E402
+
+from app import notifications  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 JAVA = "http://127.0.0.1:18088"
@@ -178,6 +181,11 @@ try:
           code == 409 and problem.get("code") == "ROTATION_WINDOW_OPEN", f"{code} {problem}")
 
     print("--- who was told")
+    # Who received a notice is read from the log, which records every send either way. What each
+    # notice *says* is asserted against the functions that build them, not against the log: the
+    # bodies only appear in the log when no SMTP host is configured, and once mail was switched on
+    # "the broadcast carries no key" started passing against a line that never contained the body.
+    # A security assertion that cannot fail is worse than no assertion at all.
     log = python_log(marker)
     check("the Partner Admins would get the key itself",
           "Your new sandbox security key" in log, "notice not found in the log")
@@ -185,11 +193,21 @@ try:
           "Security key changed for ZZ Keys Fintech" in log, "notice not found")
     check("the APIM Admin team would be told which organisation rotated",
           "Key rotation: ZZ Keys Fintech" in log, "notice not found")
-    change_notice = log.split("Security key changed for")[-1][:1200] if "Security key changed for" in log else ""
-    check("the broadcast carries no key",
-          second["plaintext"] not in change_notice, "the key appeared in the broadcast")
+
+    _, broadcast = notifications.key_changed_broadcast(
+        partner_name="ZZ Keys Fintech", partner_code="PTN-00000", env="sandbox",
+        who="by the APIM Admin team (admin@apigw.local)",
+        overlap="The previous key keeps working for 20 more minutes.")
+    check("the broadcast carries no key", second["plaintext"] not in broadcast,
+          "the key appeared in the broadcast")
     check("the broadcast says who to contact",
-          "contact the APIM Admin team immediately" in change_notice, "wording missing")
+          "contact the APIM Admin team immediately" in broadcast, "wording missing")
+    _, admin_notice = notifications.key_for_admins(
+        partner_name="ZZ Keys Fintech", partner_code="PTN-00000", env="sandbox",
+        who="by the APIM Admin team (admin@apigw.local)", client_id="zz-keys-sbx",
+        plaintext=second["plaintext"], overlap="The previous key keeps working for 20 more minutes.")
+    check("the admins' notice does carry the key, and says it is shown once",
+          second["plaintext"] in admin_notice and "cannot tell you the value again" in admin_notice)
 
     print("--- undoing a rotation")
     code, revoked = call(PYTHON, "POST", f"/api/admin/keys/{second['key']['id']}/revoke")

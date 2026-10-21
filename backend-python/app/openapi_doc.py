@@ -113,6 +113,8 @@ RESPONSES: dict[tuple[str, str], Any] = {
     ("get", "/api/partner/pages/{slug}"): s.PublishedPageView,
     ("get", "/api/partner/usage"): s.UsageReport,
     ("get", "/api/partner/usage/logs"): [s.LogEntry],
+    # --- payload encryption
+    ("get", "/api/crypto/public-key"): s.PublicKey,
     # --- probe
     ("get", "/actuator/health"): s.Health,
 }
@@ -124,6 +126,9 @@ PUBLIC = {
     ("post", "/api/auth/otp/request"),
     ("post", "/api/auth/otp/verify"),
     ("get", "/actuator/health"),
+    # Necessarily open: a client cannot encrypt its first request until it has this key, and has no
+    # session yet either.
+    ("get", "/api/crypto/public-key"),
 }
 
 # Carries the shared ingest token rather than a session, so it gets its own scheme.
@@ -159,6 +164,13 @@ TAGS = [
         "description": "What a signed-in partner sees. Scoped to their own organization throughout.",
     },
     {"name": "health", "description": "Liveness probe. Same path and shape as Spring Actuator's."},
+    {
+        "name": "crypto",
+        "description": (
+            "The public key the portals encrypt payloads to. **backend-java serves the same key** — "
+            "nginx may route a request to either service, so both hold one keypair."
+        ),
+    },
 ]
 
 DESCRIPTION = """
@@ -184,6 +196,18 @@ exactly — 0, 3 or 6 fractional digits, never padded. The portals compare these
 
 **Secrets are returned once.** A generated key, a private key and an IPV salt appear in the response
 that creates them and never again; only a hash or an encrypted form is stored.
+
+### Payload encryption
+
+The portals encrypt every request body and receive every response encrypted, on top of TLS. Per
+request they generate an AES-256 key, wrap it with the platform's RSA public key
+(`GET /api/crypto/public-key`) and send it in `X-Encrypt-Key`; bodies and replies are AES-256-GCM
+under that key, as `{"iv": ..., "data": ...}`. Error bodies are encrypted too, so a validation
+failure's `fields` does not travel in the clear. Query strings are not encrypted.
+
+**On a developer machine this is optional** — a request without the headers is answered in plaintext,
+which is what keeps this page's Try-it-out, `curl` and the test harness usable. A production
+deployment refuses unencrypted `/api` requests.
 
 ### Two services, one contract
 

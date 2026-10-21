@@ -80,7 +80,10 @@ class ApisixConfigFactoryTest {
                 new ApigwProperties.TryIt("SIMULATE", "http://sbx:9080", "http://sandbox-api:9080", Duration.ofSeconds(5)),
                 new ApigwProperties.Crypto(null),
                 new ApigwProperties.Auth(null, Duration.ofHours(8), Duration.ofMinutes(5), 6, 5,
-                        Duration.ofSeconds(30), 5, Duration.ofMinutes(15), "no-reply@apigw.local", true));
+                        Duration.ofSeconds(30), 5, Duration.ofMinutes(15), "no-reply@apigw.local", true),
+                // Payload encryption plays no part in gateway configuration; null takes the
+                // development keypair, which this test never exercises.
+                new ApigwProperties.Payload(null, false));
         Map<String, Object> logger = (Map<String, Object>) ((Map<String, Object>) ApisixConfigFactory
                 .usageLogger(Env.SANDBOX, props).get("plugins")).get("http-logger");
         assertThat(logger).containsEntry("uri", "http://sink").containsEntry("auth_header", "Ingest t0k");
