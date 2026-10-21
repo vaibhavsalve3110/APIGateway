@@ -48,6 +48,27 @@ class Settings(BaseSettings):
     # than from /ui. Off by default, and ignored under the production profile.
     local_ui_cors: bool = Field(default=False, alias="LOCAL_UI_CORS")
 
+    # --- payload encryption (VAPT). The RSA private key that unwraps the AES key on every encrypted
+    # portal payload. **backend-java must hold the same one**, because nginx may route a request the
+    # portal encrypted to either service. Empty outside production falls back to the development
+    # keypair in common/payload_crypto.py, which both services carry; in production a missing key is
+    # fatal, since falling back to a published keypair would make the whole mechanism pointless.
+    payload_private_key: str = Field(default="", alias="PAYLOAD_PRIVATE_KEY")
+    # True rejects an unencrypted portal request outright. Off on a developer machine so Swagger UI,
+    # the local console, curl, the parity harness and the gates keep working; on in production, where
+    # a tester dropping the header must not be answered in plaintext. Defaults to on under the
+    # production profile regardless of this value — see payload_encryption_required.
+    payload_encryption_enforced: bool = Field(default=False, alias="PAYLOAD_ENCRYPTION_ENFORCED")
+
+    @property
+    def payload_encryption_required(self) -> bool:
+        """Production always enforces; elsewhere it is opt-in.
+
+        Deriving it rather than reading the flag directly means a production deployment cannot end up
+        accepting plaintext because someone left the flag at its default.
+        """
+        return self.payload_encryption_enforced or self.environment == "production"
+
     # --- security keys. CP-SEC-04: the previous key stays valid this long after a rotation.
     key_overlap_minutes: int = Field(default=20, alias="KEY_OVERLAP_MINUTES")
     # Sends the new key itself to the Partner Admins. False sends only the change notice.

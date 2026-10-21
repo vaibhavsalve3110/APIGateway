@@ -20,11 +20,13 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import db, openapi_doc
 from .common import errors
 from .common.problem import ApiException, default_code, problem_response
+from .middleware import PayloadEncryptionMiddleware
 from .routers import (
     api_admin,
     auth_routes,
     catalogue,
     content,
+    crypto,
     dashboard,
     ingest,
     keys,
@@ -67,6 +69,7 @@ app.include_router(api_admin.router)
 app.include_router(auth_routes.router)
 app.include_router(catalogue.router)
 app.include_router(content.router)
+app.include_router(crypto.router)
 app.include_router(dashboard.router)
 app.include_router(ingest.router)
 app.include_router(keys.router)
@@ -79,6 +82,13 @@ app.include_router(usage.router)
 # Must come after every router: it reads the finished route table. Describes the response shapes and
 # declares the bearer scheme without touching how any handler answers — see openapi_doc.py.
 openapi_doc.install(app)
+
+# Payload encryption (VAPT). Added last, which puts it **outermost**: Starlette applies middleware in
+# reverse, so this is the first thing a request meets and the last thing a response passes. That is
+# required in both directions — the body must be decrypted before any route or validator parses it,
+# and the response must be encrypted after the exception handlers have turned a failure into its
+# problem document, so an error body is encrypted too rather than leaking in the clear.
+app.add_middleware(PayloadEncryptionMiddleware)
 
 # --------------------------------------------------------------------------- the local console
 #
