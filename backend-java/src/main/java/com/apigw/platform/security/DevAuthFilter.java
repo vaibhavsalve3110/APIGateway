@@ -32,7 +32,7 @@ class DevAuthFilter extends OncePerRequestFilter {
                 && SecurityContextHolder.getContext().getAuthentication() == null) {
             List<SimpleGrantedAuthority> authorities = Arrays.stream(String.valueOf(request.getHeader(ROLES)).split(","))
                     .map(String::trim)
-                    .filter(role -> role.equals("ADMIN") || role.equals("EDITOR") || role.equals("PARTNER"))
+                    .filter(role -> role.equals("ADMIN") || role.equals("DEVELOPER") || role.equals("PARTNER"))
                     .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
                     .toList();
             String partner = request.getHeader(PARTNER);

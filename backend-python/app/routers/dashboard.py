@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .. import roles
 from ..auth import requires
 from ..common.time import instant_column, java_instant
 from ..db import connection
@@ -37,7 +38,7 @@ def _parse_window(value: str | None) -> timedelta:
     return total or _DEFAULT_WINDOW
 
 
-@router.get("/dashboard", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+@router.get("/dashboard", dependencies=[Depends(requires(*roles.READ_PLATFORM))])
 async def dashboard(
     window: str | None = None,
     conn: AsyncConnection = Depends(connection),
@@ -174,7 +175,7 @@ async def dashboard(
     }
 
 
-@router.get("/errors", dependencies=[Depends(requires("ADMIN"))])
+@router.get("/errors", dependencies=[Depends(requires(*roles.READ_PLATFORM))])
 async def errors(
     source: str | None = None,
     limit: int = Query(default=100, ge=1, le=1000),

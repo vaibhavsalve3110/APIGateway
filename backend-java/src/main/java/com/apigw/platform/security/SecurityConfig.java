@@ -44,7 +44,7 @@ public class SecurityConfig {
                         // Gateway log shipping; authenticated with the ingest token inside the controller.
                         .requestMatchers(HttpMethod.POST, "/internal/usage/batch").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/admin/apis/**", "/api/admin/usage/**",
-                                "/api/admin/dashboard/**", "/api/admin/dashboard").hasAnyRole("ADMIN", "EDITOR")
+                                "/api/admin/dashboard/**", "/api/admin/dashboard").hasAnyRole("ADMIN", "DEVELOPER")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/partner/**").hasRole("PARTNER")
                         .requestMatchers("/api/me").authenticated()

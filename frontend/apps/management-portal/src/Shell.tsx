@@ -25,6 +25,8 @@ const sections: { title: string; items: NavItem[] }[] = [
     title: "API Management",
     items: [
       { to: "/apis", label: "APIs", icon: icon("M12 3 3 7.5 12 12l9-4.5L12 3ZM3 12l9 4.5 9-4.5M3 16.5l9 4.5 9-4.5") },
+      // Both roles: a developer raises requests and watches them, an admin decides them.
+      { to: "/approvals", label: "Approvals", icon: icon("m9 11 3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11") },
       { to: "/products", label: "Products", icon: icon("M21 8v8l-9 5-9-5V8l9-5 9 5ZM3 8l9 5 9-5"), planned: true, adminOnly: true },
     ],
   },
@@ -42,9 +44,9 @@ const sections: { title: string; items: NavItem[] }[] = [
     items: [
       { to: "/usage", label: "API Usage", icon: icon("M3 3v18h18M7 15l3.5-4 3 2.5L20 7") },
       { to: "/logs", label: "API Logs", icon: icon("M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"), adminOnly: false },
-      { to: "/audit", label: "Audit Log", icon: icon("M12 2 4 5.5v6c0 5 3.4 9 8 10.5 4.6-1.5 8-5.5 8-10.5v-6L12 2Z"), adminOnly: true },
-      { to: "/errors", label: "System Errors", icon: icon("M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"), adminOnly: true },
-      { to: "/users", label: "Users & Roles", icon: icon("M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"), planned: true, adminOnly: true },
+      { to: "/audit", label: "Audit Log", icon: icon("M12 2 4 5.5v6c0 5 3.4 9 8 10.5 4.6-1.5 8-5.5 8-10.5v-6L12 2Z") },
+      { to: "/errors", label: "System Errors", icon: icon("M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z") },
+      { to: "/users", label: "Users & Roles", icon: icon("M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"), adminOnly: true },
     ],
   },
 ];

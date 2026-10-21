@@ -450,6 +450,62 @@ class SignedIn(BaseModel):
     partnerCode: str | None  # noqa: N815
 
 
+class ChangeRequestView(BaseModel):
+    """A proposed change waiting for, or decided by, an administrator."""
+
+    id: str
+    objectType: str = Field(description="API today")  # noqa: N815
+    objectId: str | None  # noqa: N815
+    objectName: str | None = Field(  # noqa: N815
+        default=None, description="The API's current name; null once it has been deleted"
+    )
+    objectStatus: str | None  # noqa: N815
+    action: str = Field(description="PUBLISH, UPDATE or DISABLE")
+    payload: dict[str, Any] | None = Field(
+        default=None, description="The proposed definition. Null for PUBLISH and DISABLE"
+    )
+    summary: str = Field(description="One line naming the API and what would change")
+    status: str = Field(description="PENDING, APPROVED, REJECTED or WITHDRAWN")
+    requestedBy: str  # noqa: N815
+    requestedAt: str  # noqa: N815
+    decidedBy: str | None  # noqa: N815
+    decidedAt: str | None  # noqa: N815
+    decisionNote: str | None  # noqa: N815
+    applied: dict[str, Any] | None = Field(
+        default=None, description="On approval, the API as it now stands"
+    )
+
+
+class ApiOrChangeRequest(BaseModel):
+    """Either an `ApiView` or a `ChangeRequestView`, depending on whether approval was needed.
+
+    Editing a draft applies at once and returns the API; editing a **live** API raises a change
+    request and returns that, leaving the live definition serving. Rather than pretend these are one
+    shape, the document says so: read `objectType`, which only the request has.
+    """
+
+    model_config = {"json_schema_extra": {"oneOf": [
+        {"$ref": "#/components/schemas/ApiView"},
+        {"$ref": "#/components/schemas/ChangeRequestView"},
+    ]}}
+
+
+class PlatformUserView(BaseModel):
+    """Someone who signs in to the management portal. No organization, and no password."""
+
+    id: str
+    email: str = Field(description="The sign-in identity; not changeable once created")
+    fullName: str  # noqa: N815
+    role: str = Field(description="ADMIN or DEVELOPER")
+    status: str
+    createdBy: str  # noqa: N815
+    createdAt: str  # noqa: N815
+    updatedAt: str  # noqa: N815
+    lastLoginAt: str | None = Field(  # noqa: N815
+        default=None, description="Null until they have signed in once"
+    )
+
+
 class PayloadScheme(BaseModel):
     """How to wrap a payload. Described in the response so a client needs no out-of-band document."""
 

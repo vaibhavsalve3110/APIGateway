@@ -21,6 +21,7 @@ export function ApisPage() {
   const navigate = useNavigate();
   const notice = (useLocation().state as { notice?: string } | null)?.notice;
   const [deleting, setDeleting] = useState<ApiView | null>(null);
+  const [queuedNote, setQueuedNote] = useState<string | null>(null);
 
   const apis = useQuery({ queryKey: ["apis"], queryFn: () => api.get<ApiView[]>("/api/admin/apis") });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["apis"] });
@@ -29,9 +30,23 @@ export function ApisPage() {
     mutationFn: (a: ApiView) => api.put<ApiView>(`/api/admin/apis/${a.id}/guest-visibility`, { visible: !a.guestVisible }),
     onSuccess: refresh,
   });
+  // A draft and a withdrawn API are both published by "enable"; only a live one is disabled. The
+  // old condition treated a DRAFT as something to disable, which offered the wrong button entirely.
   const setStatus = useMutation({
-    mutationFn: (a: ApiView) => api.post<ApiView>(`/api/admin/apis/${a.id}/${a.status === "DISABLED" ? "enable" : "disable"}`),
-    onSuccess: refresh,
+    mutationFn: (a: ApiView) =>
+      api.post<ApiView | { objectType: string; summary: string }>(
+        `/api/admin/apis/${a.id}/${a.status === "ACTIVE" ? "disable" : "enable"}`,
+      ),
+    onSuccess: (result) => {
+      refresh();
+      // Publishing always queues, and so does a developer's withdrawal, so the reply may be a
+      // change request rather than the API. Saying nothing here would look like it had happened.
+      setQueuedNote(
+        result && typeof result === "object" && "objectType" in result
+          ? `${(result as { summary: string }).summary} — sent to an APIM Admin for approval.`
+          : null,
+      );
+    },
   });
 
   const all = apis.data ?? [];
@@ -51,9 +66,10 @@ export function ApisPage() {
       <PageHeader
         title="APIs"
         subtitle={`${counts.ALL} APIs onboarded · ${counts.ACTIVE} active · ${all.filter((a) => a.guestVisible).length} visible to guest users`}
-        actions={isAdmin ? <button className="btn btn-primary" onClick={() => navigate("/apis/new")}>+ Add API</button> : null}
+        actions={<button className="btn btn-primary" onClick={() => navigate("/apis/new")}>+ Add API</button>}
       />
       {notice ? <div className="banner banner-ok">{notice}</div> : null}
+      {queuedNote ? <div className="banner banner-ok">{queuedNote} <Link to="/approvals">Track it under Approvals</Link>.</div> : null}
       <ErrorBanner error={apis.error ?? toggleGuest.error ?? setStatus.error} />
 
       <div className="card">
@@ -72,7 +88,7 @@ export function ApisPage() {
             <thead>
               <tr>
                 <th style={{ width: "30%" }}>API</th><th>Category</th><th>Method</th><th>Status</th><th>Guest</th>
-                <th>Rate limit</th><th>Last updated</th>{isAdmin ? <th /> : null}
+                <th>Rate limit</th><th>Last updated</th><th />
               </tr>
             </thead>
             <tbody>
@@ -88,22 +104,28 @@ export function ApisPage() {
                     ) : null}
                   </td>
                   <td>
-                    <Switch on={a.guestVisible} label={`Visible to guest users: ${a.name}`} disabled={!isAdmin || toggleGuest.isPending}
+                    {/* Guest visibility on a live API is an administrator's call; on a draft a
+                        developer sets it like any other field. */}
+                    <Switch on={a.guestVisible} label={`Visible to guest users: ${a.name}`}
+                      disabled={toggleGuest.isPending || (a.status === "ACTIVE" && !isAdmin)}
                       onChange={() => toggleGuest.mutate(a)} />
                   </td>
                   <td className="mono nowrap" style={{ fontSize: 11.5 }}>{a.rateLimitCount.toLocaleString("en-IN")} / {a.rateLimitWindow.toLowerCase()}</td>
                   <td className="muted nowrap" style={{ fontSize: 12 }}>{formatDateTime(a.updatedAt)}</td>
-                  {isAdmin ? (
-                    <td>
-                      <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                        <button className="btn btn-sm" onClick={() => navigate(`/apis/${a.id}`)}>Edit</button>
-                        <button className="btn btn-sm" disabled={setStatus.isPending} onClick={() => setStatus.mutate(a)}>
-                          {a.status === "DISABLED" ? "Enable" : "Disable"}
-                        </button>
+                  <td>
+                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
+                      <button className="btn btn-sm" onClick={() => navigate(`/apis/${a.id}`)}>Edit</button>
+                      <button className="btn btn-sm" disabled={setStatus.isPending} onClick={() => setStatus.mutate(a)}
+                        title={a.status === "ACTIVE"
+                          ? (isAdmin ? "Takes effect immediately" : "Raises a request for an APIM Admin")
+                          : "Raises a request for an APIM Admin"}>
+                        {a.status === "ACTIVE" ? "Disable" : "Publish"}
+                      </button>
+                      {isAdmin ? (
                         <button className="btn btn-sm btn-danger" onClick={() => setDeleting(a)}>Delete</button>
-                      </div>
-                    </td>
-                  ) : null}
+                      ) : null}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

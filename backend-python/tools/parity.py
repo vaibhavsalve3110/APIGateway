@@ -50,8 +50,13 @@ def _b64(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
-def _token(roles: list[str]) -> str:
-    """A token in backend-java's TokenService shape, so both services accept it."""
+def _token(roles: list[str], username: str = "admin@apigw.local") -> str:
+    """A token in backend-java's TokenService shape, so both services accept it.
+
+    ``username`` matters wherever *who* is calling decides the answer rather than just their role —
+    approving a change requires a different person from the one who raised it, so a gate testing
+    that needs two identities holding the same role.
+    """
     now = int(time.time())
     header = _b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
     payload = _b64(
@@ -60,8 +65,8 @@ def _token(roles: list[str]) -> str:
                 "iss": "apigw-platform",
                 "iat": now,
                 "exp": now + 3600,
-                "sub": "admin@apigw.local",
-                "preferred_username": "admin@apigw.local",
+                "sub": username,
+                "preferred_username": username,
                 "name": "Parity Check",
                 "realm_access": {"roles": roles},
             },

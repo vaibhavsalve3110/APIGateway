@@ -45,7 +45,7 @@ public abstract class IntegrationTest {
 
     protected static RequestPostProcessor editor() {
         return jwt().jwt(j -> j.claim("preferred_username", "ravi.editor"))
-                .authorities(new SimpleGrantedAuthority("ROLE_EDITOR"));
+                .authorities(new SimpleGrantedAuthority("ROLE_DEVELOPER"));
     }
 
     /**

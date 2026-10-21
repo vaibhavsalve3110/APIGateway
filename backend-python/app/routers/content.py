@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .. import roles
 from ..auth import Principal, requires
 from ..common import audit
 from ..common.problem import ApiException
@@ -156,7 +157,7 @@ async def _view(conn: AsyncConnection, page_id: uuid.UUID) -> dict[str, Any]:
     }
 
 
-@router.get("", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+@router.get("", dependencies=[Depends(requires(*roles.ADMIN_ONLY))])
 async def list_pages() -> list[dict[str, Any]]:
     """Every portal page, ordered as partners see them."""
     async with engine().connect() as conn:
@@ -169,7 +170,7 @@ async def list_pages() -> list[dict[str, Any]]:
         return [await _view(conn, i) for i in ids]
 
 
-@router.get("/{page_id}", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+@router.get("/{page_id}", dependencies=[Depends(requires(*roles.ADMIN_ONLY))])
 async def get_page(page_id: uuid.UUID) -> dict[str, Any]:
     """One page, with its current draft and its version history."""
     async with engine().connect() as conn:
@@ -178,7 +179,7 @@ async def get_page(page_id: uuid.UUID) -> dict[str, Any]:
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_page(
-    request: PageRequest, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    request: PageRequest, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """Add a page. It begins as a draft: partners see nothing until it is published."""
     async with engine().begin() as conn:
@@ -220,7 +221,7 @@ async def create_page(
 async def update_page(
     page_id: uuid.UUID,
     request: PageRequest,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Saves the text as a new version and updates the page's details; the live page is untouched."""
     async with engine().begin() as conn:
@@ -267,7 +268,7 @@ async def update_page(
 
 @router.post("/{page_id}/publish")
 async def publish_page(
-    page_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    page_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """CP-API-10: makes the latest saved text the one partners see."""
     async with engine().begin() as conn:
@@ -297,7 +298,7 @@ async def publish_page(
 
 @router.post("/{page_id}/unpublish")
 async def unpublish_page(
-    page_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    page_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """Withdraw a page from the portal. The draft and its history are kept."""
     async with engine().begin() as conn:
@@ -323,7 +324,7 @@ async def unpublish_page(
 
 @router.delete("/{page_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_page(
-    page_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    page_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> Response:
     """Remove a page and every version of it."""
     async with engine().begin() as conn:

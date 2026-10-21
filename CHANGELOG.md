@@ -7,6 +7,94 @@ Database changes are Flyway migrations in `backend/src/main/resources/db/migrati
 in order, and are recorded in `apim.flyway_schema_history`. The one-time PostgreSQL setup script is
 `infra/postgres/local-setup.sql`.
 
+## 2026-10-22
+
+### Two APIM roles, and publishing now needs a second pair of eyes
+
+**ADMIN** does everything. **DEVELOPER** drafts and edits APIs and reads every log — and that is all.
+Publishing an API, changing one that is already live, and withdrawing one go to an administrator
+instead of taking effect.
+
+`EDITOR` is renamed to `DEVELOPER` (migration `V8`). It was already the "works on APIs" role, but it
+could publish an API, change a live one and manage partner organizations, their credentials and their
+users with nobody else involved. The name now matches what it is, and the permissions were narrowed
+to match the name. `VIEWER` is gone: the Python service accepted it in its role lists but Java never
+defined it, so no row ever held it.
+
+**After pulling, anyone holding a session token is signed out once** — their role no longer exists.
+
+#### What waits for approval, and what does not
+
+| | |
+|---|---|
+| Create an API | Applies. **Always a draft now**, whoever asks and whatever `status` the request carries |
+| Edit a draft | Applies at once — a draft serves no traffic |
+| **Publish** | Change request, always, **including an administrator's own** |
+| **Edit a live API** | Change request; the live definition keeps serving until approved |
+| Withdraw from service | Immediate for an admin (CP-API-03 — an incident is the wrong time to wait for a signature), a request for a developer |
+| Delete | Administrators only, and still only after the 7-day cooling period |
+
+Editing a live API had to be covered or the whole thing would be decorative: a developer could
+leave an API in draft and simply edit the live one instead. The proposal is stored whole, as the JSON
+body the endpoint would have received, and applied on approval by replaying it through the same
+functions a direct call uses — so an approved change cannot do something a direct call would not.
+
+**An approval must come from a different administrator than the requester.** Enforced in the service,
+not by hiding a button. A single-administrator platform therefore cannot publish anything, so the
+Users & roles screen says so plainly when it finds only one, and `LAST_ADMIN` refuses any change that
+would leave none at all.
+
+`POST /apis/{id}/enable` now answers **202 with the change request**, not 200 with the API. `PUT
+/apis/{id}` answers 202 with a request when the API is live, and 200 with the API otherwise.
+`objectType` is the discriminator, and the API reference documents the response as either.
+
+#### New screens
+
+- **Approvals** — the queue, for both roles: a developer watches their requests, an administrator
+  decides them. Shows the proposed definition in full before approving, takes a note that lands in
+  the audit trail, and says "needs another admin" rather than silently omitting the button on one's
+  own request.
+- **Users & roles** (CP-LOG-02) — was a `ComingSoon` placeholder. Create APIM users, set roles,
+  suspend, reinstate and remove. No passwords: sign-in is a one-time code, so adding someone is all
+  that is needed. An address already belonging to a Developer Portal user is refused — one address is
+  one person, or a session's role would depend on which table was consulted.
+
+Screens a developer cannot use are now wrapped, not merely hidden from the navigation: a bookmark or
+a typed URL used to reach them and then fail as a wall of 403s.
+
+#### Also
+
+**The audit trail names both people.** The change is attributed to whoever requested it, with the
+approver in the detail, and the approver has their own `APPROVE_*` row. It has to answer both "who
+changed this" and "who allowed it".
+
+**A known Java defect moved rather than being fixed.** `URI.create` rejects braces, so a backend URL
+containing `{param}` made building the gateway configuration throw. It used to fire on create,
+because a create published immediately; now that a create lands as a draft it fires on *publish*
+instead. Since every publish goes through the Python control plane, which tolerates braces, the
+defect is no longer reachable through the portal. `check_api_writes.py` asserts all three parts of
+that, so it stays true on purpose rather than by luck.
+
+**Java's create also lands as a draft now.** It had been left returning ACTIVE, which would have let
+a caller reaching that service directly walk straight past the approval. Note the remaining boundary:
+the approval itself is implemented only in the Python control plane. nginx routes every API write
+there, and `backend-java`'s port is not public, but anyone who can reach that port directly can still
+publish without review. Worth closing if that port is ever exposed.
+
+New gate `check_roles_and_approvals.py`: a developer cannot publish, cannot edit a live API into
+effect, and cannot reach partners, credentials, products, portal content or the APIM users list —
+that last one most of all, since they could otherwise make themselves an admin. Plus: nobody approves
+their own request, an approval applies exactly what was proposed, and the platform cannot be left
+without an administrator.
+
+**The demo seeder now creates two administrators**, because a demo with one could not publish
+anything, and renames `ravi.editor@` to `ravi.developer@`.
+
+Verified: 12 of 12 gates, parity unchanged on 8 endpoints, 22 of 22 stack sanity checks, Java's test
+suite, and the WebCrypto interop gate. **Not** verified in a browser — the Browser pane still refuses
+the self-signed host while the dev CA is untrusted, so the two new screens have been typechecked and
+built but not clicked through.
+
 ## 2026-10-21
 
 ### Portal payloads are encrypted end to end (VAPT)

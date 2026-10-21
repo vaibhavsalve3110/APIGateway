@@ -3,16 +3,19 @@ import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 
 import { AuthProvider, ComingSoon, SignInScreen } from "@apigw/ui";
 
+import { AdminOnly } from "./AdminOnly";
 import { Shell } from "./Shell";
 import { ApiEditorPage } from "./pages/ApiEditorPage";
 import { ApisPage } from "./pages/ApisPage";
 import { ApiLogsPage } from "./pages/ApiLogsPage";
+import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { AuditPage } from "./pages/AuditPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ErrorsPage } from "./pages/ErrorsPage";
 import { PartnerDetailPage } from "./pages/PartnerDetailPage";
 import { PartnersPage } from "./pages/PartnersPage";
 import { PartnerUsersPage } from "./pages/PartnerUsersPage";
+import { PlatformUsersPage } from "./pages/PlatformUsersPage";
 import { UsagePage } from "./pages/UsagePage";
 
 const queryClient = new QueryClient({
@@ -30,34 +33,33 @@ const router = createBrowserRouter([
       { path: "apis", element: <ApisPage /> },
       { path: "apis/new", element: <ApiEditorPage /> },
       { path: "apis/:id", element: <ApiEditorPage /> },
-      { path: "partners", element: <PartnersPage /> },
-      { path: "partners/:id", element: <PartnerDetailPage /> },
-      { path: "partner-users", element: <PartnerUsersPage /> },
+      { path: "approvals", element: <ApprovalsPage /> },
+      // Wrapped rather than merely hidden from the navigation: the backend refuses a developer on
+      // all of these, and a 403 page is a worse explanation than saying so up front.
+      { path: "partners", element: <AdminOnly><PartnersPage /></AdminOnly> },
+      { path: "partners/:id", element: <AdminOnly><PartnerDetailPage /></AdminOnly> },
+      { path: "partner-users", element: <AdminOnly><PartnerUsersPage /></AdminOnly> },
       { path: "usage", element: <UsagePage /> },
       { path: "audit", element: <AuditPage /> },
       { path: "errors", element: <ErrorsPage /> },
       {
         path: "products",
-        element: <ComingSoon title="Products & portal content" brdRefs="CP-API-09, CP-API-10"
-          description="Bundle APIs into Products, and edit and publish Developer Portal pages." />,
+        element: <AdminOnly><ComingSoon title="Products & portal content" brdRefs="CP-API-09, CP-API-10"
+          description="Bundle APIs into Products, and edit and publish Developer Portal pages." /></AdminOnly>,
       },
       // CP-API-06/07 now live on each API's page (Request / Responses tabs and Import).
       { path: "documentation", element: <Navigate to="/apis" replace /> },
       {
         path: "mapping",
-        element: <ComingSoon title="Access mapping" brdRefs="CP-PTN-03, CP-RPT-06"
-          description="Map Products or APIs to partner groups, with mandatory approval evidence before a mapping can be saved." />,
+        element: <AdminOnly><ComingSoon title="Access mapping" brdRefs="CP-PTN-03, CP-RPT-06"
+          description="Map Products or APIs to partner groups, with mandatory approval evidence before a mapping can be saved." /></AdminOnly>,
       },
       {
         path: "domains",
-        element: <ComingSoon title="Domains" brdRefs="CP-DOM-01 to CP-DOM-10, GW-09"
-          description="Register domains, verify ownership, bind TLS certificates and environments, and choose which APIs each domain exposes." />,
+        element: <AdminOnly><ComingSoon title="Domains" brdRefs="CP-DOM-01 to CP-DOM-10, GW-09"
+          description="Register domains, verify ownership, bind TLS certificates and environments, and choose which APIs each domain exposes." /></AdminOnly>,
       },
-      {
-        path: "users",
-        element: <ComingSoon title="Users & roles" brdRefs="CP-LOG-02"
-          description="Internal users are managed in Keycloak for now; an in-portal user screen follows." />,
-      },
+      { path: "users", element: <AdminOnly><PlatformUsersPage /></AdminOnly> },
     ],
   },
 ]);
@@ -65,7 +67,7 @@ const router = createBrowserRouter([
 export function App() {
   return (
     <AuthProvider
-      allowedRoles={["ADMIN", "EDITOR"]}
+      allowedRoles={["ADMIN", "DEVELOPER"]}
       portalName="Management Portal"
       signIn={(props) => (
         <SignInScreen

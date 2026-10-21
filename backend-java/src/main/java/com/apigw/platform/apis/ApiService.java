@@ -60,19 +60,26 @@ public class ApiService {
         return view(require(id));
     }
 
+    /**
+     * Onboards an API. It is always a draft, whatever {@code status} the request asks for.
+     *
+     * <p>It used to go straight to ACTIVE unless a draft was asked for, which is now a way to publish
+     * an API without anybody reviewing it. Publishing goes through the approval in the Python control
+     * plane (see {@code backend-python/app/routers/change_requests.py}), and a create that landed
+     * ACTIVE here would walk straight past it — the two services share one database, so a difference
+     * between them is a difference in what the platform allows.
+     */
     @Transactional
     public ApiView create(ApiRequest request, Actor actor) {
         Instant now = clock.instant();
         ApiDefinition api = new ApiDefinition(UUID.randomUUID(), now);
         apply(api, request, now);
-        if (request.status() == ApiStatus.DRAFT) {
-            api.markDraft(now);
-        }
+        api.markDraft(now);
         repository.saveAndFlush(api);
         gateway.syncApi(api);
         audit.record(actor, "CREATE", AUDIT_TYPE, api.getId(),
                 api.getName() + " onboarded at " + api.getHttpMethod() + " " + api.getProxyPath()
-                        + (api.getStatus() == ApiStatus.DRAFT ? " as a draft" : "")
+                        + " as a draft"
                         + (request.documentation() != null ? " — documentation from " + request.documentation().source() : ""));
         return view(api);
     }

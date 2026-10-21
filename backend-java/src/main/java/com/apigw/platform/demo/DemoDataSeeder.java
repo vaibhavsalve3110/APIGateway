@@ -90,8 +90,12 @@ class DemoDataSeeder implements ApplicationRunner {
         // Internal sign-ins for the Management Portal. Sign-in is an e-mailed code, so no passwords here.
         platformUsers.save(new PlatformUser(UUID.randomUUID(), "vaibhav.admin@apigw.local", "Vaibhav Salve",
                 PlatformRole.ADMIN, SEED.username(), clock.instant()));
-        platformUsers.save(new PlatformUser(UUID.randomUUID(), "ravi.editor@apigw.local", "Ravi Kumar",
-                PlatformRole.EDITOR, SEED.username(), clock.instant()));
+        // A second administrator on purpose: approving a change requires one other than the person
+        // who raised it, so a demo with a single admin could not publish anything at all.
+        platformUsers.save(new PlatformUser(UUID.randomUUID(), "priya.admin@apigw.local", "Priya Nair",
+                PlatformRole.ADMIN, SEED.username(), clock.instant()));
+        platformUsers.save(new PlatformUser(UUID.randomUUID(), "ravi.developer@apigw.local", "Ravi Kumar",
+                PlatformRole.DEVELOPER, SEED.username(), clock.instant()));
 
         GroupView tier1 = partners.createGroup(new GroupRequest("Tier-1 Aggregators", "Large payment aggregators"), SEED);
         GroupView tier2 = partners.createGroup(new GroupRequest("Tier-2 Partners", "Regional fintech partners"), SEED);

@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .. import roles
 from ..auth import Principal, requires
 from ..common import audit
 from ..common.problem import ApiException
@@ -231,7 +232,7 @@ async def generate_key(partner_id: uuid.UUID, environment: str, actor: Principal
 
 @router.get(
     "/api/admin/partners/{partner_id}/keys",
-    dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))],
+    dependencies=[Depends(requires(*roles.ADMIN_ONLY))],
 )
 async def admin_list_keys(
     partner_id: uuid.UUID, conn: AsyncConnection = Depends(connection)
@@ -245,7 +246,7 @@ async def admin_list_keys(
 async def admin_generate_key(
     partner_id: uuid.UUID,
     environment: Environment,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Issue a key to a partner on an administrator's behalf.
 
@@ -292,7 +293,7 @@ async def partner_generate_key(
 
 @router.post("/api/admin/keys/{key_id}/revoke")
 async def revoke_key(
-    key_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    key_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """Undo a rotation: discard the new key and put the previous one back, inside the window only."""
     overlap_minutes = get_settings().key_overlap_minutes

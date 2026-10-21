@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .. import roles
 from ..auth import requires
 from ..common.problem import ApiException
 from ..common.time import instant_column, java_instant
@@ -147,7 +148,7 @@ async def build_report(
     }
 
 
-@router.get("/usage/report", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+@router.get("/usage/report", dependencies=[Depends(requires(*roles.READ_PLATFORM))])
 async def report(
     frm: datetime | None = Query(default=None, alias="from"),
     to: datetime | None = None,
@@ -224,7 +225,7 @@ async def build_logs(
     ]
 
 
-@router.get("/usage/logs", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+@router.get("/usage/logs", dependencies=[Depends(requires(*roles.READ_PLATFORM))])
 async def logs(
     frm: datetime | None = Query(default=None, alias="from"),
     to: datetime | None = None,
@@ -242,7 +243,7 @@ async def logs(
 
 @router.get(
     "/usage/apis/{api_id}/consumers",
-    dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))],
+    dependencies=[Depends(requires(*roles.READ_PLATFORM))],
 )
 async def consumers(api_id: str, conn: AsyncConnection = Depends(connection)) -> list[str]:
     """CP-RPT-04: who has actually called this API inside the retention window."""
@@ -263,7 +264,7 @@ async def consumers(api_id: str, conn: AsyncConnection = Depends(connection)) ->
     return [row.name for row in result]
 
 
-@router.get("/audit/actors", dependencies=[Depends(requires("ADMIN"))])
+@router.get("/audit/actors", dependencies=[Depends(requires(*roles.READ_PLATFORM))])
 async def audit_actors(
     conn: AsyncConnection = Depends(connection),
 ) -> list[dict[str, Any]]:
@@ -294,7 +295,7 @@ async def audit_actors(
     ]
 
 
-@router.get("/audit", dependencies=[Depends(requires("ADMIN"))])
+@router.get("/audit", dependencies=[Depends(requires(*roles.READ_PLATFORM))])
 async def audit(
     limit: int = Query(default=100, ge=1, le=1000),
     frm: datetime | None = Query(default=None, alias="from"),

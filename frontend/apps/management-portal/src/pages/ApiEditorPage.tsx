@@ -70,12 +70,32 @@ function clientProblems(doc: ApiDocumentation): string[] {
   return out;
 }
 
+/** What a save returns instead of the API when the change needs approving first. */
+interface ChangeRequestReply {
+  id: string;
+  objectType: string;
+  action: string;
+  summary: string;
+  status: string;
+  requestedBy: string;
+}
+
+/**
+ * Saving a live API queues a change rather than applying it, and the reply says which happened.
+ * `objectType` exists only on a change request, so it is the discriminator — the status code would
+ * do as well, but the API client returns parsed bodies, not responses.
+ */
+function isQueued(saved: ApiView | ChangeRequestReply): saved is ChangeRequestReply {
+  return "objectType" in saved;
+}
+
 /** Add / edit an API with its full contract (BRD CP-API-01, CP-API-06, CP-API-07). */
 export function ApiEditorPage() {
   const { id } = useParams();
   const isNew = !id || id === "new";
   const { api, user } = useAuth();
-  const canEdit = user.roles.includes("ADMIN");
+  // Developers draft and edit APIs too; what differs is whether a save takes effect or is reviewed.
+  const canEdit = user.roles.includes("ADMIN") || user.roles.includes("DEVELOPER");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [section, setSection] = useState<Section>("overview");
@@ -83,6 +103,7 @@ export function ApiEditorPage() {
   const [importing, setImporting] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
   const [savedNote, setSavedNote] = useState<string | null>(null);
+  const [queued, setQueued] = useState<ChangeRequestReply | null>(null);
 
   const existing = useQuery({
     queryKey: ["api", id],
@@ -103,10 +124,23 @@ export function ApiEditorPage() {
         ownerTeam: blankToNull(form.ownerTeam),
         description: blankToNull(form.description),
       };
-      return isNew ? api.post<ApiView>("/api/admin/apis", body) : api.put<ApiView>(`/api/admin/apis/${id}`, body);
+      // Saving a *live* API answers 202 with a change request rather than the API — see
+      // change_requests.py. Typed as either, and told apart below by objectType.
+      return isNew
+        ? api.post<ApiView>("/api/admin/apis", body)
+        : api.put<ApiView | ChangeRequestReply>(`/api/admin/apis/${id}`, body);
     },
     onSuccess: (saved) => {
       queryClient.invalidateQueries({ queryKey: ["apis"] });
+      if (isQueued(saved)) {
+        // Deliberately not written into the ["api", id] cache: these values are *proposed*, and
+        // showing them as the API's own would tell the developer their change is live when it is
+        // waiting. Re-read instead, so the form falls back to what is actually being served.
+        queryClient.invalidateQueries({ queryKey: ["api", id] });
+        setSavedNote(null);
+        setQueued(saved);
+        return;
+      }
       queryClient.setQueryData(["api", saved.id], saved);
       setSavedNote(`Saved ${new Date().toLocaleTimeString("en-IN")}`);
       if (isNew) navigate(`/apis/${saved.id}`, { replace: true });
@@ -169,11 +203,35 @@ export function ApiEditorPage() {
             {savedNote ? <span className="muted" style={{ fontSize: 12 }}>{savedNote}</span> : null}
             <button className="btn" onClick={() => setImporting(true)}>Import Swagger / Postman</button>
             <button className="btn btn-primary" disabled={save.isPending} onClick={onSave}>
-              {save.isPending ? "Saving…" : isNew ? "Add API" : "Save changes"}
+              {save.isPending
+                ? "Saving…"
+                : isNew
+                  ? "Add API"
+                  : existing.data?.status === "ACTIVE"
+                    // Saying so on the button, not after the click: "Save changes" on a live API
+                    // would promise something this does not do.
+                    ? "Submit for approval"
+                    : "Save changes"}
             </button>
           </div>
-        ) : <Chip>Read only — Admin role required to edit</Chip>}
+        ) : <Chip>Read only</Chip>}
       </div>
+
+      {queued ? (
+        <div className="banner banner-good">
+          <strong>Sent for approval.</strong>{" "}
+          {queued.summary}. This API goes on serving its current definition until an APIM Admin —
+          somebody other than you — approves the change.{" "}
+          <Link to="/approvals">Track it under Approvals</Link>.
+        </div>
+      ) : null}
+
+      {existing.data?.status === "ACTIVE" && !queued ? (
+        <div className="banner">
+          This API is live. Saving a change to it raises a request for an APIM Admin rather than
+          applying it, and the live definition keeps serving in the meantime.
+        </div>
+      ) : null}
 
       {problems.length > 0 || otherFieldErrors.length > 0 ? (
         <div className="banner banner-bad">

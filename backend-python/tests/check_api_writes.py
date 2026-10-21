@@ -24,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[2]
 JAVA = "http://127.0.0.1:18088"
 PYTHON = "http://127.0.0.1:18090"
 TOKEN = _token(["ADMIN"])
+# A second administrator: approving a change requires somebody other than the person who raised it.
+APPROVER = _token(["ADMIN"], username="approver@apigw.local")
 
 infra_env = (ROOT / "infra" / ".env").read_text(encoding="utf-8")
 
@@ -52,10 +54,10 @@ def check(label: str, ok: bool, detail: str = "") -> None:
         print(f"  FAIL  {label}{(' — ' + detail) if detail else ''}")
 
 
-def call(base: str, method: str, path: str, body=None):
+def call(base: str, method: str, path: str, body=None, token: str | None = None):
     data = json.dumps(body).encode() if body is not None else None
     request = urllib.request.Request(f"{base}{path}", data=data, method=method)
-    request.add_header("Authorization", f"Bearer {TOKEN}")
+    request.add_header("Authorization", f"Bearer {token or TOKEN}")
     if data:
         request.add_header("Content-Type", "application/json")
     try:
@@ -139,6 +141,35 @@ try:
         d = diff(java_read, py_api)
         check("java reads a python-created API identically", not d, "; ".join(d[:6]))
 
+        print("--- a draft is not reachable")
+        # Both services now create a draft whatever the request asked for, because publishing goes
+        # through the approval. The thing worth asserting is the consequence: a draft must have no
+        # route at either gateway, or "not published yet" would mean nothing.
+        check("java creates a draft", java_api["status"] == "DRAFT", java_api["status"])
+        check("python creates a draft", py_api["status"] == "DRAFT", py_api["status"])
+        for environment in ("SANDBOX", "PRODUCTION"):
+            check(f"{environment}: a draft has no route", apisix_route(environment, py_api["id"]) is None,
+                  "a draft is reachable at the gateway")
+
+        print("--- publishing, through the approval and directly")
+        # Python's publish goes through the change request, which is the path the portal uses: raised
+        # by one person and approved by another, because a self-approval is refused.
+        code, request = call(PYTHON, "POST", f"/api/admin/apis/{py_api['id']}/enable")
+        check("python's publish is queued, not applied", code == 202 and request.get("status") == "PENDING",
+              f"{code} {request}")
+        check("the API is still a draft while it waits",
+              call(PYTHON, "GET", f"/api/admin/apis/{py_api['id']}")[1]["status"] == "DRAFT",
+              "it went live without an approval")
+        code, approved = call(PYTHON, "POST", f"/api/admin/change-requests/{request['id']}/approve",
+                              token=APPROVER)
+        check("a second administrator's approval publishes it",
+              code == 200 and approved.get("applied", {}).get("status") == "ACTIVE", f"{code} {approved}")
+        # Java's own enable is the legacy direct path. It is not reachable through nginx — every API
+        # write is routed to Python — and it is exercised here only so the gateway configuration the
+        # two services produce can still be compared.
+        code, _ = call(JAVA, "POST", f"/api/admin/apis/{java_api['id']}/enable")
+        check("java publishes directly (legacy path, not routed by nginx)", code == 200, str(code))
+
         print("--- gateway configuration, as APISIX actually holds it")
         for environment in ("SANDBOX", "PRODUCTION"):
             java_route = apisix_route(environment, java_api["id"])
@@ -171,18 +202,28 @@ try:
         check("python wrote the static path rewrite",
               rewrite == {"uri": "/accounts"}, json.dumps(rewrite))
 
-        print("--- status changes move the gateway route")
-        call(PYTHON, "POST", f"/api/admin/apis/{py_api['id']}/disable")
-        check("disabling removes the sandbox route",
-              apisix_route("SANDBOX", py_api["id"]) is None, "route still present")
-        call(PYTHON, "POST", f"/api/admin/apis/{py_api['id']}/enable")
-        check("enabling puts it back",
-              apisix_route("SANDBOX", py_api["id"]) is not None, "route missing")
-
         print("--- the cooling period")
+        # Asserted while the API is still live, which is the state this refusal is about. It used to
+        # sit after a disable, where the answer is the cooling-period refusal instead.
         code, problem = call(PYTHON, "DELETE", f"/api/admin/apis/{py_api['id']}")
         check("python refuses to delete an API that is not disabled",
               code == 409 and problem.get("code") == "API_NOT_DISABLED", f"{code} {problem}")
+
+        print("--- status changes move the gateway route")
+        # An administrator's disable is immediate (CP-API-03): stopping calls to a misbehaving API is
+        # not something to queue behind a signature.
+        call(PYTHON, "POST", f"/api/admin/apis/{py_api['id']}/disable")
+        check("disabling removes the sandbox route",
+              apisix_route("SANDBOX", py_api["id"]) is None, "route still present")
+        # Re-publishing is reviewed, so the route comes back only once somebody else approves.
+        code, again = call(PYTHON, "POST", f"/api/admin/apis/{py_api['id']}/enable")
+        check("re-publishing is queued too", code == 202, f"{code} {again}")
+        check("and the route stays off while it waits",
+              apisix_route("SANDBOX", py_api["id"]) is None, "it came back without an approval")
+        call(PYTHON, "POST", f"/api/admin/change-requests/{again['id']}/approve", token=APPROVER)
+        check("approving puts the route back",
+              apisix_route("SANDBOX", py_api["id"]) is not None, "route missing")
+
         call(PYTHON, "POST", f"/api/admin/apis/{py_api['id']}/disable")
         code, problem = call(PYTHON, "DELETE", f"/api/admin/apis/{py_api['id']}")
         check("python refuses to delete inside the cooling period",
@@ -208,14 +249,32 @@ try:
 
     print("--- a backend URL containing a path parameter")
     # Pre-existing defect in backend-java, not something this port introduced: URI.create rejects
-    # braces, so onboarding such an API answers 500 instead of a validation error. Python tolerates
-    # it, which is why the two are asserted separately rather than for parity.
+    # braces, so building the gateway configuration throws and the request answers 500.
+    #
+    # It has *moved*, though. It used to fire on create, because a create published to the gateway
+    # straight away. Now that a create lands as a draft, nothing is published until the API is
+    # enabled — so Java onboards it happily and then fails when it is published. Since every publish
+    # goes through the Python control plane, which tolerates braces, the defect is no longer
+    # reachable through the portal at all. Asserted here so that stays true deliberately rather than
+    # by luck.
     braced = dict(java_body, name="ZZ Parity Braced", proxyPath="/zz/braced/{id}",
                   backendUrlSandbox="http://mock-sandbox:8080/accounts/{id}",
                   backendUrlProduction=None)
-    code, problem = call(JAVA, "POST", "/api/admin/apis", braced)
-    check("java still answers 500 for a braced backend URL (known defect)",
-          code == 500, f"{code} {problem}")
+    code, braced_api = call(JAVA, "POST", "/api/admin/apis", braced)
+    check("a braced backend URL can now be onboarded, as a draft",
+          code == 201 and braced_api.get("status") == "DRAFT", f"{code} {braced_api}")
+    if code == 201:
+        created.append(braced_api["id"])
+        code, problem = call(JAVA, "POST", f"/api/admin/apis/{braced_api['id']}/enable")
+        check("java still answers 500 when publishing it (known defect, now at publish time)",
+              code == 500, f"{code} {problem}")
+        code, request = call(PYTHON, "POST", f"/api/admin/apis/{braced_api['id']}/enable")
+        check("python queues the publish", code == 202, f"{code} {request}")
+        code, approved = call(PYTHON, "POST", f"/api/admin/change-requests/{request['id']}/approve",
+                              token=APPROVER)
+        check("and publishes it successfully, so the portal never meets the defect",
+              code == 200 and approved.get("applied", {}).get("status") == "ACTIVE",
+              f"{code} {approved}")
 
     print("--- validation")
     code, problem = call(PYTHON, "POST", "/api/admin/apis", dict(java_body, proxyPath="no-leading-slash"))

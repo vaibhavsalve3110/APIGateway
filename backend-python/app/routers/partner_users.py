@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .. import roles
 from ..auth import Principal, requires
 from ..common import audit
 from ..common.problem import ApiException
@@ -137,7 +138,7 @@ async def _email_taken(conn: AsyncConnection, email: str) -> bool:
     ).first() is not None
 
 
-@router.get("/partner-users", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+@router.get("/partner-users", dependencies=[Depends(requires(*roles.ADMIN_ONLY))])
 async def list_users(
     partnerId: uuid.UUID | None = None,  # noqa: N803 - query name matches the Java API
     conn: AsyncConnection = Depends(connection),
@@ -158,14 +159,14 @@ async def list_users(
     return [_view(r) for r in rows]
 
 
-@router.get("/partner-users/{user_id}", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+@router.get("/partner-users/{user_id}", dependencies=[Depends(requires(*roles.ADMIN_ONLY))])
 async def get_user(user_id: uuid.UUID, conn: AsyncConnection = Depends(connection)) -> dict[str, Any]:
     """One partner user."""
     return await _load(conn, user_id)
 
 
 @router.get(
-    "/partners/{partner_id}/users", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))]
+    "/partners/{partner_id}/users", dependencies=[Depends(requires(*roles.ADMIN_ONLY))]
 )
 async def list_for_partner(
     partner_id: uuid.UUID, conn: AsyncConnection = Depends(connection)
@@ -189,7 +190,7 @@ async def list_for_partner(
 async def create_user(
     partner_id: uuid.UUID,
     request: CreateRequest,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Add a person to a partner organization.
 
@@ -244,7 +245,7 @@ async def create_user(
 async def update_user(
     user_id: uuid.UUID,
     request: UpdateRequest,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Change a person's name, role or status."""
     async with engine().begin() as conn:
@@ -289,7 +290,7 @@ async def update_user(
 async def set_access(
     user_id: uuid.UUID,
     request: AccessRequest,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Grant or revoke someone's access to the developer portal."""
     async with engine().begin() as conn:
@@ -318,7 +319,7 @@ async def set_access(
 
 @router.delete("/partner-users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    user_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    user_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> Response:
     """Remove a person. What they did stays in the audit trail."""
     async with engine().begin() as conn:

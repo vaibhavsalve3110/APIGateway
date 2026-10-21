@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .. import roles
 from ..auth import Principal, requires
 from ..common import audit
 from ..common.problem import ApiException
@@ -180,7 +181,7 @@ async def _drop_credentials(partner: Any, revoked: list[tuple[str, str]]) -> Non
 
 @router.post("/partner-groups", status_code=201)
 async def create_group(
-    request: GroupRequest, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    request: GroupRequest, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """Add a partner group."""
     async with engine().begin() as conn:
@@ -215,7 +216,7 @@ async def create_group(
 
 @router.post("/partners", status_code=201)
 async def register_partner(
-    request: PartnerRequest, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    request: PartnerRequest, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """CP-PTN-01: register an organization and issue its credentials, once."""
     signature = SignatureKeyMaterial.generate()
@@ -291,7 +292,7 @@ async def register_partner(
 async def update_partner(
     partner_id: uuid.UUID,
     request: UpdateRequest,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Change a partner organization's details."""
     async with engine().begin() as conn:
@@ -318,7 +319,7 @@ async def update_partner(
 async def change_tier(
     partner_id: uuid.UUID,
     request: TierRequest,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Move a partner between sandbox-only and production access.
 
@@ -374,7 +375,7 @@ async def change_tier(
 async def set_status(
     partner_id: uuid.UUID,
     request: StatusRequest,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Suspend or reinstate a partner. Suspending stops their keys working at the gateway."""
     async with engine().begin() as conn:
@@ -409,7 +410,7 @@ async def set_status(
 
 @router.post("/partners/{partner_id}/signature")
 async def regenerate_signature(
-    partner_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    partner_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """Create a new signing pair for a partner.
 
@@ -449,7 +450,7 @@ async def regenerate_signature(
 
 @router.post("/partners/{partner_id}/ipv-salt")
 async def rotate_ipv_salt(
-    partner_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    partner_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """Issue a new IPV salt for a partner.
 
@@ -489,7 +490,7 @@ async def rotate_ipv_salt(
 
 @router.post("/partners/{partner_id}/ipv-salt/reveal")
 async def reveal_ipv_salt(
-    partner_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN"))
+    partner_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """Admin only, and audited: this returns a live secret in plain text."""
     async with engine().begin() as conn:

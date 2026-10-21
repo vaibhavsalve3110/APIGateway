@@ -17,7 +17,7 @@ public record Actor(String username, Set<String> roles, String partnerCode) {
 
     /** The single role recorded in the audit log. */
     public String primaryRole() {
-        for (String role : new String[] {"ADMIN", "EDITOR", "PARTNER", "SYSTEM"}) {
+        for (String role : new String[] {"ADMIN", "DEVELOPER", "PARTNER", "SYSTEM"}) {
             if (roles.contains(role)) {
                 return role;
             }

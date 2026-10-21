@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .. import roles
 from ..auth import Principal, requires
 from ..common import audit
 from ..common.problem import ApiException
@@ -261,7 +262,7 @@ async def _require(conn: AsyncConnection, product_id: uuid.UUID) -> Any:
 # --------------------------------------------------------------------------- routes
 
 
-@router.get("", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+@router.get("", dependencies=[Depends(requires(*roles.ADMIN_ONLY))])
 async def list_products() -> list[dict[str, Any]]:
     """Every product, with its steps and its assignments."""
     async with engine().connect() as conn:
@@ -271,7 +272,7 @@ async def list_products() -> list[dict[str, Any]]:
         return [await _view(conn, i) for i in ids]
 
 
-@router.get("/{product_id}", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+@router.get("/{product_id}", dependencies=[Depends(requires(*roles.ADMIN_ONLY))])
 async def get_product(product_id: uuid.UUID) -> dict[str, Any]:
     """One product."""
     async with engine().connect() as conn:
@@ -281,7 +282,7 @@ async def get_product(product_id: uuid.UUID) -> dict[str, Any]:
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_product(
     request: ProductRequest,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Add a product. It is a draft until published."""
     async with engine().begin() as conn:
@@ -325,7 +326,7 @@ async def create_product(
 async def update_product(
     product_id: uuid.UUID,
     request: ProductRequest,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Change a product, including the order of its steps."""
     async with engine().begin() as conn:
@@ -413,7 +414,7 @@ async def _set_published(product_id: uuid.UUID, publish: bool, actor: Principal)
 
 @router.post("/{product_id}/publish")
 async def publish_product(
-    product_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    product_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """Make a product visible to the partners it is assigned to."""
     return await _set_published(product_id, True, actor)
@@ -421,7 +422,7 @@ async def publish_product(
 
 @router.post("/{product_id}/unpublish")
 async def unpublish_product(
-    product_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    product_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> dict[str, Any]:
     """Withdraw a product from the portal. Its assignments are kept."""
     return await _set_published(product_id, False, actor)
@@ -431,7 +432,7 @@ async def unpublish_product(
 async def assign_product(
     product_id: uuid.UUID,
     request: AssignRequest,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """CP-API-09: give an organization — or one named user inside it — sight of this journey."""
     async with engine().begin() as conn:
@@ -520,7 +521,7 @@ async def assign_product(
 async def unassign_product(
     product_id: uuid.UUID,
     assignment_id: uuid.UUID,
-    actor: Principal = Depends(requires("ADMIN", "EDITOR")),
+    actor: Principal = Depends(requires(*roles.ADMIN_ONLY)),
 ) -> dict[str, Any]:
     """Take a product away from one partner."""
     async with engine().begin() as conn:
@@ -560,7 +561,7 @@ async def unassign_product(
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_product(
-    product_id: uuid.UUID, actor: Principal = Depends(requires("ADMIN", "EDITOR"))
+    product_id: uuid.UUID, actor: Principal = Depends(requires(*roles.ADMIN_ONLY))
 ) -> Response:
     """Remove a product and every assignment of it."""
     async with engine().begin() as conn:

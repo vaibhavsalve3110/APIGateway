@@ -25,6 +25,7 @@ from .routers import (
     api_admin,
     auth_routes,
     catalogue,
+    change_requests,
     content,
     crypto,
     dashboard,
@@ -33,6 +34,7 @@ from .routers import (
     partner_admin,
     partner_portal,
     partner_users,
+    platform_users,
     products,
     usage,
 )
@@ -68,6 +70,7 @@ app = FastAPI(
 app.include_router(api_admin.router)
 app.include_router(auth_routes.router)
 app.include_router(catalogue.router)
+app.include_router(change_requests.router)
 app.include_router(content.router)
 app.include_router(crypto.router)
 app.include_router(dashboard.router)
@@ -76,6 +79,7 @@ app.include_router(keys.router)
 app.include_router(partner_admin.router)
 app.include_router(partner_portal.router)
 app.include_router(partner_users.router)
+app.include_router(platform_users.router)
 app.include_router(products.router)
 app.include_router(usage.router)
 

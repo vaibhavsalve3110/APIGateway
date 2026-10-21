@@ -33,14 +33,18 @@ INGEST = "ingestToken"
 # model. `None` means the route answers with no body.
 
 RESPONSES: dict[tuple[str, str], Any] = {
-    # --- APIs, admin side
+    # --- APIs, admin side.
+    #
+    # Three of these no longer return an ApiView. Publishing always raises a change request, and so
+    # does editing a live API or a developer withdrawing one, so the reply is the request — see
+    # change_requests.py. `objectType` is what tells a caller which it received.
     ("get", "/api/admin/apis"): [s.ApiView],
     ("post", "/api/admin/apis"): s.ApiView,
     ("get", "/api/admin/apis/{api_id}"): s.ApiView,
-    ("put", "/api/admin/apis/{api_id}"): s.ApiView,
+    ("put", "/api/admin/apis/{api_id}"): s.ApiOrChangeRequest,
     ("delete", "/api/admin/apis/{api_id}"): None,
-    ("post", "/api/admin/apis/{api_id}/disable"): s.ApiView,
-    ("post", "/api/admin/apis/{api_id}/enable"): s.ApiView,
+    ("post", "/api/admin/apis/{api_id}/disable"): s.ApiOrChangeRequest,
+    ("post", "/api/admin/apis/{api_id}/enable"): s.ChangeRequestView,
     ("put", "/api/admin/apis/{api_id}/guest-visibility"): s.ApiView,
     # --- partners and groups
     ("get", "/api/admin/partner-groups"): [s.GroupView],
@@ -113,6 +117,20 @@ RESPONSES: dict[tuple[str, str], Any] = {
     ("get", "/api/partner/pages/{slug}"): s.PublishedPageView,
     ("get", "/api/partner/usage"): s.UsageReport,
     ("get", "/api/partner/usage/logs"): [s.LogEntry],
+    # --- approvals
+    ("get", "/api/admin/change-requests"): [s.ChangeRequestView],
+    ("get", "/api/admin/change-requests/{request_id}"): s.ChangeRequestView,
+    ("post", "/api/admin/change-requests/{request_id}/approve"): s.ChangeRequestView,
+    ("post", "/api/admin/change-requests/{request_id}/reject"): s.ChangeRequestView,
+    ("post", "/api/admin/change-requests/{request_id}/withdraw"): s.ChangeRequestView,
+    # --- APIM users and roles
+    ("get", "/api/admin/platform-users"): [s.PlatformUserView],
+    ("post", "/api/admin/platform-users"): s.PlatformUserView,
+    ("get", "/api/admin/platform-users/{user_id}"): s.PlatformUserView,
+    ("put", "/api/admin/platform-users/{user_id}"): s.PlatformUserView,
+    ("put", "/api/admin/platform-users/{user_id}/role"): s.PlatformUserView,
+    ("put", "/api/admin/platform-users/{user_id}/status"): s.PlatformUserView,
+    ("delete", "/api/admin/platform-users/{user_id}"): None,
     # --- payload encryption
     ("get", "/api/crypto/public-key"): s.PublicKey,
     # --- probe

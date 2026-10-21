@@ -11,7 +11,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
-/** Maps Keycloak realm roles (ADMIN, EDITOR, PARTNER) to Spring Security roles. */
+/** Maps Keycloak realm roles (ADMIN, DEVELOPER, PARTNER) to Spring Security roles. */
 public class KeycloakJwtConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
     @Override
@@ -28,7 +28,7 @@ public class KeycloakJwtConverter implements Converter<Jwt, AbstractAuthenticati
         }
         return ((List<Object>) roles).stream()
                 .map(String::valueOf)
-                .filter(role -> role.equals("ADMIN") || role.equals("EDITOR") || role.equals("PARTNER"))
+                .filter(role -> role.equals("ADMIN") || role.equals("DEVELOPER") || role.equals("PARTNER"))
                 .map(role -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + role))
                 .toList();
     }

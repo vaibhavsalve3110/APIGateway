@@ -2,6 +2,10 @@
 
 Field-for-field equivalents of backend-java's ApiView, PartnerView and GroupView. The portals are
 shared between the services, so a missing or renamed field here is a broken screen there.
+
+The role check is per route rather than on the router, because the two halves differ: a developer
+reads the API catalogue, which is their work, but not the partner organizations, whose view carries
+Client IDs, signing fingerprints and the masked IPV salt.
 """
 
 import json
@@ -11,12 +15,13 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .. import roles
 from ..auth import requires
 from ..common.problem import ApiException
 from ..common.time import instant_column, java_instant
 from ..db import connection
 
-router = APIRouter(prefix="/api/admin", dependencies=[Depends(requires("ADMIN", "EDITOR", "VIEWER"))])
+router = APIRouter(prefix="/api/admin")
 
 # deletable_from is computed in SQL so it keeps the microsecond precision of disabled_at; doing the
 # arithmetic in Python on a datetime would be fine, but keeping it here means one source of truth
@@ -126,14 +131,14 @@ def _partner_view(row: Any) -> dict[str, Any]:
     }
 
 
-@router.get("/apis")
+@router.get("/apis", dependencies=[Depends(requires(*roles.READ_PLATFORM))])
 async def list_apis(conn: AsyncConnection = Depends(connection)) -> list[dict[str, Any]]:
     """Every API in the catalogue, whatever its status."""
     result = await conn.execute(text(f"SELECT {_API_COLUMNS} FROM api_definition ORDER BY name ASC"))
     return [_api_view(row) for row in result]
 
 
-@router.get("/apis/{api_id}")
+@router.get("/apis/{api_id}", dependencies=[Depends(requires(*roles.READ_PLATFORM))])
 async def get_api(api_id: str, conn: AsyncConnection = Depends(connection)) -> dict[str, Any]:
     """One API, with its documentation."""
     result = await conn.execute(
@@ -145,7 +150,7 @@ async def get_api(api_id: str, conn: AsyncConnection = Depends(connection)) -> d
     return _api_view(row)
 
 
-@router.get("/partner-groups")
+@router.get("/partner-groups", dependencies=[Depends(requires(*roles.ADMIN_ONLY))])
 async def list_groups(conn: AsyncConnection = Depends(connection)) -> list[dict[str, Any]]:
     """Partner groups, each with a count of the organizations in it."""
     result = await conn.execute(
@@ -170,7 +175,7 @@ async def list_groups(conn: AsyncConnection = Depends(connection)) -> list[dict[
     ]
 
 
-@router.get("/partners")
+@router.get("/partners", dependencies=[Depends(requires(*roles.ADMIN_ONLY))])
 async def list_partners(conn: AsyncConnection = Depends(connection)) -> list[dict[str, Any]]:
     """Every partner organization. Stored secrets come back masked, never in full."""
     result = await conn.execute(
@@ -184,7 +189,7 @@ async def list_partners(conn: AsyncConnection = Depends(connection)) -> list[dic
     return [_partner_view(row) for row in result]
 
 
-@router.get("/partners/{partner_id}")
+@router.get("/partners/{partner_id}", dependencies=[Depends(requires(*roles.ADMIN_ONLY))])
 async def get_partner(partner_id: str, conn: AsyncConnection = Depends(connection)) -> dict[str, Any]:
     """One partner organization."""
     result = await conn.execute(
