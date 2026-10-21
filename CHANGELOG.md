@@ -7,6 +7,52 @@ Database changes are Flyway migrations in `backend/src/main/resources/db/migrati
 in order, and are recorded in `apim.flyway_schema_history`. The one-time PostgreSQL setup script is
 `infra/postgres/local-setup.sql`.
 
+## 2026-10-21
+
+### Mail works: sign-in codes and key notices are sent again
+
+Three separate causes, found in this order:
+
+1. **The network block is gone.** Outbound SMTP was blocked when mail was first set up, which is why
+   `SMTP_HOST` was commented out. Re-tested: 587 and 465 both reach `smtp.gmail.com` from the host
+   *and* from inside the containers, and the stored App Password authenticates on both. Port 25 is
+   still blocked and always will be.
+2. **`SMTP_HOST` was empty** in `infra/.env`, so both services took their "no mail server" branch and
+   logged the notices instead of sending them.
+3. **The real one: `docker-compose.yml` never passed any `SMTP_*` or `MAIL_FROM` to
+   `backend-python`.** That service read its own empty defaults and logged every notice no matter
+   what `infra/.env` said, while `backend-java` — which does receive them — would have sent. Since
+   nginx routes all of `/api/auth/*` to Python, **portal sign-in codes could never have been
+   e-mailed at all**, with or without a host configured.
+
+`SMTP_STARTTLS` was not passed to `backend-java` either; its `application.yml` defaults it to true,
+which is why 587 worked regardless.
+
+`EMAIL_KEY_TO_ADMIN` now reaches Python as well — Java already read it from the environment, so the
+two services could disagree about whether the new key itself goes to the Partner Admins.
+
+**Deliberately still not passed to Python:** `TOKEN_TTL_HOURS`, `OTP_TTL_MINUTES`, `OTP_LENGTH`, the
+OTP rate limits and `KEY_OVERLAP_MINUTES`. Python reads all of them, but Java hardcodes the
+equivalents in `application.yml` (`PT8H`, `PT5M`, `PT30S`, `PT20M`). Making them settable on one side
+only would mean a value in `infra/.env` that one service honours and the other ignores — and a code
+minted by one service is verified by whichever answers the next request. Python's defaults already
+match those four; change both services together or neither.
+
+**Mail now verifies the server's certificate.** `smtplib`'s `starttls()` with no context does not,
+and what travels immediately afterwards is the mail password. Port 465 is also handled properly now:
+it speaks TLS from the first byte, so the old code would have opened it as plain SMTP and stalled
+until the timeout waiting for a greeting that never comes.
+
+Verified by sending a real message through `backend-python`'s own notifications module, inside the
+container, with the live configuration — delivered, and no `SMTP` rows in the error log.
+
+**After pulling:** set `SMTP_HOST=smtp.gmail.com` and `SMTP_STARTTLS=true` in `infra/.env` (it is
+git-ignored, so this change is not in the repo), then rebuild and restart both backends:
+`docker compose --profile app up -d --build backend-python backend-java`. With a host configured
+there is **no more `devCode`** in the sign-in response: if a send fails, the code exists only in the
+e-mail that never arrived and the failure is in Dashboard → System errors. Leave `SMTP_HOST` empty to
+go back to codes in the log.
+
 ## 2026-10-14
 
 ### The API reference describes the API

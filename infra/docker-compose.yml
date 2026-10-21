@@ -164,6 +164,9 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      # application.yml reads this, but it was never passed through, so a value in infra/.env had
+      # no effect here. Its yml default is true, which is why 587 worked anyway.
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       MAIL_FROM: ${MAIL_FROM:-no-reply@apigw.local}
       PUBLIC_SANDBOX_URL: https://sandbox-api.apigw.com
     # 18088 on the host is for the parity harness and ad-hoc debugging only; partner and portal
@@ -213,6 +216,27 @@ services:
       GATEWAY_REDIS_HOST: valkey
       GATEWAY_SANDBOX_HOSTS: sandbox-api.apigw.com
       GATEWAY_PRODUCTION_HOSTS: api.apigw.com
+      # Mail. These were missing entirely until 2026-10-21, so this service fell back to its
+      # "no SMTP host" branch and logged every notice no matter what infra/.env said, while
+      # backend-java — which does receive them — sent. Sign-in codes and key-rotation notices both
+      # go out from whichever service answered the request, so the two must be configured alike or
+      # delivery depends on which one nginx happened to route to.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@apigw.local}
+      # Whether the new key itself goes to the Partner Admins. backend-java reads this from the
+      # environment too, so leaving it out here let the two services disagree about it.
+      EMAIL_KEY_TO_ADMIN: ${EMAIL_KEY_TO_ADMIN:-true}
+      # Deliberately not passed: TOKEN_TTL_HOURS, OTP_TTL_MINUTES, OTP_LENGTH, the OTP rate limits
+      # and KEY_OVERLAP_MINUTES. This service reads all of them, but backend-java hardcodes the
+      # equivalents in application.yml (token-ttl PT8H, otp-ttl PT5M, resend-cooldown PT30S,
+      # overlap-window PT20M). Making them settable on this side alone would mean a value in
+      # infra/.env that one service honours and the other ignores — and a code minted by one is
+      # verified by whichever answers the next request. The defaults in settings.py already match
+      # those four. To change any of them, change both services together.
       PORT: 8090
     # 18090 on the host, same reason as backend-java above.
     ports: ["127.0.0.1:18090:8090"]

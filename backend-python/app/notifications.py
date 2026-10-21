@@ -12,13 +12,15 @@ The same notices go out whether the partner rotated their own key or an APIM Adm
 only the wording says who. They are sent after the key exists and the gateway has accepted it, so
 nobody is told about a rotation that failed.
 
-With no SMTP host configured the notices are logged instead, which is how a developer machine — and
-right now this network, where outbound SMTP is blocked — behaves.
+With no SMTP host configured the notices are logged instead, which is how a developer machine without
+a mail server behaves. Note that this is decided per service: until 2026-10-21 the compose file never
+passed SMTP_* to this container, so it took that branch and logged while backend-java sent.
 """
 
 import asyncio
 import logging
 import smtplib
+import ssl
 from datetime import UTC, datetime
 from email.message import EmailMessage
 
@@ -55,9 +57,22 @@ async def _send_one(to: str, subject: str, body: str) -> None:
     message.set_content(body)
 
     def deliver() -> None:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as server:
-            if settings.smtp_starttls:
-                server.starttls()
+        # An explicit context, because smtplib's default for starttls() does not verify the
+        # server's certificate — and what travels immediately afterwards is the mail password.
+        context = ssl.create_default_context()
+        # 465 speaks TLS from the first byte. Opening it as plain SMTP and then issuing STARTTLS
+        # waits for a greeting that never comes, so the send stalls until the timeout.
+        if settings.smtp_port == 465:
+            server = smtplib.SMTP_SSL(
+                settings.smtp_host, settings.smtp_port, timeout=20, context=context
+            )
+        else:
+            server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20)
+        with server:
+            if settings.smtp_port != 465 and settings.smtp_starttls:
+                server.ehlo()
+                server.starttls(context=context)
+                server.ehlo()
             if settings.smtp_user:
                 server.login(settings.smtp_user, settings.smtp_password)
             server.send_message(message)
