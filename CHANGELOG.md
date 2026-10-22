@@ -9,6 +9,43 @@ in order, and are recorded in `apim.flyway_schema_history`. The one-time Postgre
 
 ## 2026-10-22
 
+### A failed sign-in e-mail no longer looks like a sent one
+
+Outbound SMTP is blocked on this network again — 25, 465 and 587 all time out, from the host and from
+inside the containers, though DNS resolves and 443 is fine. Nothing in the platform changed; the
+network did. What the platform did wrong was hide it:
+
+- **the audit trail said "One-time code e-mailed to …" when the send had failed.** `delivered` was
+  `bool(settings.smtp_host)`, computed before sending, so it reported whether mail was *configured*
+  rather than whether the message left.
+- **the fallback code was suppressed on exactly the failure it exists for.** With a host configured,
+  `devCode` was withheld, so a mail-server timeout left the person waiting for an e-mail that never
+  arrived, clicking Resend, with no way in.
+
+`notifications.send()` now returns whether every message actually left. Sign-in uses that: the audit
+says `COULD NOT BE E-MAILED` and points at System errors, and outside production the code comes back
+in the response so a mail outage cannot lock a developer machine out. Under the production profile it
+answers `502 CODE_NOT_SENT` instead, because the code must not travel over the wire there — and
+clicking Resend forever is worse than being told.
+
+A notice, by contrast, still ignores the result: a failed key-rotation notice must not fail the
+rotation. That asymmetry is now stated where `send` is defined.
+
+The sign-in screen's wording followed, since it claimed "no mail server is configured", which is only
+one of the two reasons it can now appear.
+
+**To find why a delivery failed** — the reason is recorded per message:
+
+```sql
+SELECT occurred_at, code, message FROM apim.error_event
+ WHERE source = 'SMTP' ORDER BY occurred_at DESC LIMIT 20;
+```
+
+**The real fix on a network like this is an HTTPS mail provider**, not SMTP: 443 reaches
+api.brevo.com, api.sendgrid.com and gmail.googleapis.com from both the host and the containers, while
+every SMTP port is blocked. Until then, leave `SMTP_HOST` set — it costs a 20-second timeout per
+sign-in and the code is shown on screen — or clear it to skip the wait.
+
 ### Two APIM roles, and publishing now needs a second pair of eyes
 
 **ADMIN** does everything. **DEVELOPER** drafts and edits APIs and reads every log — and that is all.

@@ -164,9 +164,15 @@ export function SignInScreen({ product, headline, points, dark = false, api, err
           ) : (
             <form className="stack" style={{ gap: 14 }} onSubmit={(e) => { e.preventDefault(); verify(); }}>
               {devCode ? (
+                // Two reasons land here now: no mail server configured at all, or one configured
+                // that failed — a mail-server timeout used to suppress this and leave the person
+                // waiting for an e-mail that never came. The wording covers both without guessing.
                 <div className="banner banner-warn" style={{ fontSize: 12.5 }}>
-                  No mail server is configured, so the code is shown here for this environment only:{" "}
+                  The code could not be e-mailed, so it is shown here for this environment only:{" "}
                   <strong className="mono">{devCode}</strong>
+                  <div style={{ marginTop: 4, opacity: 0.85 }}>
+                    An administrator can see why under System errors.
+                  </div>
                 </div>
               ) : null}
               <label className="field">

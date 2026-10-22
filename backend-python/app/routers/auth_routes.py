@@ -315,8 +315,12 @@ async def request_code(request: CodeRequest, http: Request) -> dict[str, Any]:
             },
         )
 
-    delivered = bool(settings.smtp_host)
-    await send(
+    # Whether it *actually* went, not merely whether a mail server is configured. This used to be
+    # `bool(settings.smtp_host)`, computed before the send, so a timeout to the mail server was
+    # recorded in the audit trail as "e-mailed to ..." and the response suppressed the fallback code
+    # — leaving the person waiting for a message that was never delivered, and the trail saying it
+    # had been. Outbound SMTP on this network comes and goes, so this is not a rare path.
+    delivered = await send(
         [email],
         "Your sign-in code",
         f"""Your one-time code is {code}.
@@ -326,14 +330,34 @@ It is valid for {settings.otp_ttl_minutes} minutes and can be used once.
 If you did not ask to sign in, ignore this message and tell your administrator.
 """,
     )
-    await _audit(email, ["SYSTEM"], None, "SIGN_IN_CODE_SENT",
-                 f"One-time code {'e-mailed to ' if delivered else 'issued for (not e-mailed) '}{email}"
-                 f" from {client_ip}")
 
-    # Shown in the portal only when it could not be e-mailed, and never in production.
+    if delivered:
+        detail = f"One-time code e-mailed to {email} from {client_ip}"
+    elif settings.smtp_host:
+        detail = (
+            f"One-time code for {email} from {client_ip} COULD NOT BE E-MAILED"
+            " — see Dashboard > System errors"
+        )
+    else:
+        detail = f"One-time code issued for (not e-mailed) {email} from {client_ip}"
+    await _audit(email, ["SYSTEM"], None, "SIGN_IN_CODE_SENT", detail)
+
+    if not delivered and settings.environment == "production":
+        # In production the code must not come back over the wire, so there is nothing useful to
+        # return and pretending otherwise would leave the user clicking Resend forever.
+        raise ApiException(
+            502,
+            "CODE_NOT_SENT",
+            "Your code could not be e-mailed. The mail server did not accept it — tell your "
+            "administrator, who will find the reason under System errors.",
+        )
+
+    # Returned when it could not be e-mailed, so a mail outage does not lock a developer machine
+    # out, and never under the production profile.
     return {
         "expiresInSeconds": settings.otp_ttl_minutes * 60,
         "resendInSeconds": settings.otp_resend_cooldown_seconds,
+        "delivered": delivered,
         "devCode": None if delivered else code,
     }
 

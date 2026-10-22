@@ -435,9 +435,12 @@ class Captcha(BaseModel):
 class CodeRequested(BaseModel):
     expiresInSeconds: int  # noqa: N815
     resendInSeconds: int  # noqa: N815
+    delivered: bool = Field(
+        description="Whether the e-mail actually left. False means the code was not sent to the inbox"
+    )
     devCode: str | None = Field(  # noqa: N815
         default=None,
-        description="The code itself, returned only when no mail server was reachable. Never in production",
+        description="The code itself, returned only when the e-mail did not go. Never in production",
     )
 
 

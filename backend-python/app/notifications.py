@@ -34,21 +34,30 @@ from .settings import get_settings
 log = logging.getLogger(__name__)
 
 
-async def send(recipients: list[str], subject: str, body: str) -> None:
-    """One message per distinct, non-blank recipient — as the Java Mailer does."""
+async def send(recipients: list[str], subject: str, body: str) -> bool:
+    """One message per distinct, non-blank recipient — as the Java Mailer does.
+
+    Returns whether every message actually left. A caller that only *notifies* can ignore that: a
+    failed key-rotation notice must not fail the rotation, which is why a failure is recorded rather
+    than raised. Sign-in is the opposite — if the code did not go, the person cannot get in, and
+    claiming success leaves them waiting for an e-mail that will never arrive.
+    """
     seen: list[str] = []
     for recipient in recipients:
         if recipient and recipient.strip() and recipient not in seen:
             seen.append(recipient)
+    delivered = True
     for recipient in seen:
-        await _send_one(recipient, subject, body)
+        if not await _send_one(recipient, subject, body):
+            delivered = False
+    return delivered
 
 
-async def _send_one(to: str, subject: str, body: str) -> None:
+async def _send_one(to: str, subject: str, body: str) -> bool:
     settings = get_settings()
     if not settings.smtp_host:
         log.info("NOTICE (no SMTP) to %s: %s\n%s", to, subject, body)
-        return
+        return False
 
     message = EmailMessage()
     message["To"] = to
@@ -81,13 +90,16 @@ async def _send_one(to: str, subject: str, body: str) -> None:
         # smtplib blocks; running it on the event loop would stall every other request.
         await asyncio.to_thread(deliver)
         log.info("Notification '%s' sent to %s", subject, to)
+        return True
     except Exception as exc:  # noqa: BLE001 - a failed notice must not fail the rotation
+        log.warning("Could not send '%s' to %s: %s", subject, to, exc)
         await errors.record(
             errors.SMTP,
             "NOTIFICATION_NOT_SENT",
             f"Could not send '{subject}' to {to}: {exc}",
             detail=repr(exc),
         )
+        return False
 
 
 def _instant(value: datetime | None) -> str | None:
