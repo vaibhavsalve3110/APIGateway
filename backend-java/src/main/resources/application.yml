@@ -9,8 +9,12 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  # Off: backend-python owns the schema now and applies the same files from its own migrations/
+  # directory, against this same flyway_schema_history table. Leaving Flyway on would race it for
+  # the ledger, and it would refuse to start anyway — it would find rows for migrations whose files
+  # are no longer on this service's classpath.
   flyway:
-    locations: classpath:db/migration
+    enabled: false
   # Sign-in is e-mail OTP: the platform mints and verifies its own session tokens (see AuthConfig),
   # so no OAuth2 resource-server settings are needed. Mail is optional locally; see OtpMailer.
   mail:

@@ -22,6 +22,9 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /opt/venv /opt/venv
 COPY app ./app
+# The schema. This service owns the migrations now, so they ship with it rather than with
+# backend-java — a deployment without them would start against a database it cannot create.
+COPY migrations ./migrations
 
 USER apigw
 EXPOSE 8090

@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # default. Set as the connection's search_path so no SQL in this service names a schema.
     db_schema: str = Field(default="apim", alias="DB_SCHEMA")
 
+    # Apply pending schema migrations at startup, which is what Flyway did inside backend-java
+    # before this service took them over. Turn it off where migrations are run as a separate step
+    # before the rollout; the service then assumes the schema is already at the right version.
+    run_migrations: bool = Field(default=True, alias="RUN_MIGRATIONS")
+
     auth_jwt_secret: str = Field(default="", alias="AUTH_JWT_SECRET")
 
     # 32 random bytes, base64. Empty outside production falls back to the same built-in development

@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import db, openapi_doc
+from . import db, migrations, openapi_doc
 from .common import errors
 from .common.problem import ApiException, default_code, problem_response
 from .middleware import PayloadEncryptionMiddleware
@@ -50,10 +50,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     log.info("Connecting to PostgreSQL (schema %s)", settings.db_schema)
     if not await db.ping():
         # Not fatal: the health endpoint reports DOWN and the orchestrator can restart us, which is
-        # kinder than crash-looping while the database comes up.
+        # kinder than crash-looping while the database comes up. Migrations are skipped — there is
+        # nothing to migrate against, and failing here would turn a slow database into a crash loop.
         log.error("Database is not reachable at startup")
     else:
         log.info("Connected to PostgreSQL")
+        if settings.run_migrations:
+            # Deliberately fatal when it fails. A service that half-migrated its schema and then
+            # served traffic is worse than one that refused to start and said why.
+            await migrations.apply()
+        else:
+            log.warning("RUN_MIGRATIONS is off — assuming the schema is already at the right version")
     yield
     await db.dispose()
 
