@@ -160,9 +160,13 @@ public class ProductService {
         }
 
         assignments.saveAndFlush(new ProductAssignment(UUID.randomUUID(), productId, partner.getId(),
-                user == null ? null : user.getId(), actor.username(), clock.instant()));
+                user == null ? null : user.getId(), actor.username(), clock.instant(),
+                request.approvalReference().strip()));
+        // The authority goes in the detail as well as the column: the audit trail is what gets
+        // exported for a review, and a mapping's authority is the first thing asked about.
         audit.record(actor, "ASSIGN", AUDIT_TYPE, productId, "Product " + product.getName() + " assigned to "
-                + (user == null ? partner.getName() + " (whole organization)" : user.getEmail() + " at " + partner.getName()));
+                + (user == null ? partner.getName() + " (whole organization)" : user.getEmail() + " at " + partner.getName())
+                + " — authority: " + request.approvalReference().strip());
         return toView(product, allApisById());
     }
 
@@ -173,9 +177,13 @@ public class ProductService {
                 .filter(a -> a.getProductId().equals(productId))
                 .orElseThrow(() -> ApiException.notFound("Assignment", assignmentId));
         String who = describe(assignment);
+        String authority = assignment.getApprovalReference();
         assignments.delete(assignment);
+        // Naming the authority being undone, because the row holding it is now gone and the trail is
+        // the only remaining record of what the access had been granted under.
         audit.record(actor, "UNASSIGN", AUDIT_TYPE, productId,
-                "Product " + product.getName() + " withdrawn from " + who);
+                "Product " + product.getName() + " withdrawn from " + who
+                        + " — had been authorised by: " + authority);
         return toView(product, allApisById());
     }
 
@@ -282,7 +290,7 @@ public class ProductService {
                     return new AssignmentView(a.getId(), a.getPartnerId(),
                             partner == null ? null : partner.getCode(), partner == null ? null : partner.getName(),
                             a.getPartnerUserId(), user == null ? null : user.getEmail(),
-                            a.getAssignedBy(), a.getAssignedAt());
+                            a.getAssignedBy(), a.getAssignedAt(), a.getApprovalReference());
                 })
                 .sorted((x, y) -> Objects.compare(x.partnerName(), y.partnerName(),
                         java.util.Comparator.nullsLast(String::compareTo)))

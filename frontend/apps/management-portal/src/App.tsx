@@ -7,6 +7,9 @@ import { AdminOnly } from "./AdminOnly";
 import { Shell } from "./Shell";
 import { ApiEditorPage } from "./pages/ApiEditorPage";
 import { ApisPage } from "./pages/ApisPage";
+import { MappingPage } from "./pages/MappingPage";
+import { ProductEditorPage } from "./pages/ProductEditorPage";
+import { ProductsPage } from "./pages/ProductsPage";
 import { ApiLogsPage } from "./pages/ApiLogsPage";
 import { ApprovalsPage } from "./pages/ApprovalsPage";
 import { AuditPage } from "./pages/AuditPage";
@@ -42,18 +45,12 @@ const router = createBrowserRouter([
       { path: "usage", element: <UsagePage /> },
       { path: "audit", element: <AuditPage /> },
       { path: "errors", element: <ErrorsPage /> },
-      {
-        path: "products",
-        element: <AdminOnly><ComingSoon title="Products & portal content" brdRefs="CP-API-09, CP-API-10"
-          description="Bundle APIs into Products, and edit and publish Developer Portal pages." /></AdminOnly>,
-      },
+      { path: "products", element: <AdminOnly><ProductsPage /></AdminOnly> },
+      { path: "products/new", element: <AdminOnly><ProductEditorPage /></AdminOnly> },
+      { path: "products/:id", element: <AdminOnly><ProductEditorPage /></AdminOnly> },
       // CP-API-06/07 now live on each API's page (Request / Responses tabs and Import).
       { path: "documentation", element: <Navigate to="/apis" replace /> },
-      {
-        path: "mapping",
-        element: <AdminOnly><ComingSoon title="Access mapping" brdRefs="CP-PTN-03, CP-RPT-06"
-          description="Map Products or APIs to partner groups, with mandatory approval evidence before a mapping can be saved." /></AdminOnly>,
-      },
+      { path: "mapping", element: <AdminOnly><MappingPage /></AdminOnly> },
       {
         path: "domains",
         element: <AdminOnly><ComingSoon title="Domains" brdRefs="CP-DOM-01 to CP-DOM-10, GW-09"

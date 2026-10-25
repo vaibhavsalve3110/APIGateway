@@ -129,13 +129,32 @@ try:
     check("python refuses to delete a published product",
           code == 409 and problem.get("code") == "PRODUCT_PUBLISHED", f"{code} {problem}")
 
-    code, assigned = call(PYTHON, "POST", f"/api/admin/products/{py_made['id']}/assignments",
-                          {"partnerId": partner_id})
-    check("python assigns to an organization", code == 200 and len(assigned["assignments"]) == 1,
-          f"{code} {assigned}")
-
+    # CP-PTN-03: a mapping records the authority for it, and is refused without one. Checked before
+    # the happy path, because "required" is the claim worth proving.
     code, problem = call(PYTHON, "POST", f"/api/admin/products/{py_made['id']}/assignments",
                          {"partnerId": partner_id})
+    check("python refuses a mapping with no approval reference",
+          code == 400 and problem.get("code") == "VALIDATION_FAILED", f"{code} {problem}")
+    code, problem = call(PYTHON, "POST", f"/api/admin/products/{py_made['id']}/assignments",
+                         {"partnerId": partner_id, "approvalReference": "   "})
+    check("and refuses whitespace as a reference",
+          code == 400 and problem.get("code") == "VALIDATION_FAILED", f"{code} {problem}")
+
+    code, assigned = call(PYTHON, "POST", f"/api/admin/products/{py_made['id']}/assignments",
+                          {"partnerId": partner_id, "approvalReference": "  ZZ-TICKET-4471  "})
+    check("python assigns to an organization", code == 200 and len(assigned["assignments"]) == 1,
+          f"{code} {assigned}")
+    check("the reference is stored, trimmed",
+          assigned["assignments"][0].get("approvalReference") == "ZZ-TICKET-4471",
+          str(assigned["assignments"][0].get("approvalReference")))
+
+    _, trail = call(PYTHON, "GET", "/api/admin/audit?limit=20")
+    check("the authority is written into the audit trail",
+          any("ZZ-TICKET-4471" in (e.get("detail") or "") for e in trail),
+          "the trail does not name the authority")
+
+    code, problem = call(PYTHON, "POST", f"/api/admin/products/{py_made['id']}/assignments",
+                         {"partnerId": partner_id, "approvalReference": "ZZ-TICKET-4472"})
     check("python refuses a duplicate assignment",
           code == 409 and problem.get("code") == "ALREADY_ASSIGNED", f"{code} {problem}")
 
@@ -147,6 +166,10 @@ try:
     code, unassigned = call(PYTHON, "DELETE",
                             f"/api/admin/products/{py_made['id']}/assignments/{assignment_id}")
     check("python unassigns", code == 200 and unassigned["assignments"] == [], f"{code} {unassigned}")
+    _, trail = call(PYTHON, "GET", "/api/admin/audit?limit=20")
+    check("withdrawing names the authority it was granted under",
+          any(e.get("action") == "UNASSIGN" and "ZZ-TICKET-4471" in (e.get("detail") or "") for e in trail),
+          "the trail does not say what was undone")
 
     code, draft = call(PYTHON, "POST", f"/api/admin/products/{py_made['id']}/unpublish")
     check("python unpublishes", code == 200 and draft["status"] == "DRAFT", f"{code} {draft}")

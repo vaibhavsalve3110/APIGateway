@@ -8,6 +8,7 @@ import { ApiDetailPage } from "./pages/ApiDetailPage";
 import { CataloguePage } from "./pages/CataloguePage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { KeysPage } from "./pages/KeysPage";
+import { ProductsPage } from "./pages/ProductsPage";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
 
@@ -21,6 +22,7 @@ const router = createBrowserRouter([
       { path: "apis", element: <CataloguePage /> },
       { path: "apis/:id", element: <ApiDetailPage /> },
       { path: "keys", element: <KeysPage /> },
+      { path: "products", element: <ProductsPage /> },
       // Sandbox testing lives on each API's own page ("Try it live"), so a separate console is not needed.
       { path: "sandbox", element: <Navigate to="/apis" replace /> },
       {

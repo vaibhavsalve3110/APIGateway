@@ -4,8 +4,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import com.apigw.platform.apis.ApiStatus;
@@ -39,7 +39,8 @@ public final class ProductDtos {
     }
 
     public record AssignmentView(UUID id, UUID partnerId, String partnerCode, String partnerName,
-                                 UUID partnerUserId, String partnerUserEmail, String assignedBy, Instant assignedAt) {
+                                 UUID partnerUserId, String partnerUserEmail, String assignedBy, Instant assignedAt,
+                                 String approvalReference) {
     }
 
     public record ProductView(UUID id, String name, String slug, String summary, String description,
@@ -48,8 +49,15 @@ public final class ProductDtos {
                               Instant updatedAt, Instant publishedAt) {
     }
 
-    /** Assigning a Product: to a whole organization, or to one user inside it. */
-    public record AssignRequest(@NotNull UUID partnerId, UUID partnerUserId) {
+    /**
+     * Assigning a Product: to a whole organization, or to one user inside it.
+     *
+     * <p>{@code approvalReference} is required by CP-PTN-03 — the authority for the mapping, as a
+     * ticket, e-mail or note reference. The column is NOT NULL, so this is not optional on either
+     * control plane: the two share the database.
+     */
+    public record AssignRequest(@NotNull UUID partnerId, UUID partnerUserId,
+                                @NotBlank @Size(max = 200) String approvalReference) {
     }
 
     /** What a partner sees: published Products assigned to them, with only the APIs that are live. */

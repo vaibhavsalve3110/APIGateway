@@ -28,7 +28,13 @@ class ProductJourneyTest extends IntegrationTest {
                                 """.formatted(name, path)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return JsonPath.read(created, "$.id");
+        String id = JsonPath.read(created, "$.id");
+        // Published deliberately: a create lands as a draft now, and a partner's view of a product
+        // lists only its *live* APIs, so a journey built from drafts would correctly appear empty.
+        // These tests are about what a partner sees once everything is live.
+        mvc.perform(post("/api/admin/apis/{id}/enable", id).with(admin()))
+                .andExpect(status().isOk());
+        return id;
     }
 
     private String createProduct(String name, String initiate, String confirm) throws Exception {
@@ -117,7 +123,7 @@ class ProductJourneyTest extends IntegrationTest {
         // Assigned to the organization: every user of it sees the journey, its steps and the flow document.
         mvc.perform(post("/api/admin/products/{id}/assignments", productId).with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"partnerId\":\"%s\"}".formatted(partnerId)))
+                        .content("{\"partnerId\":\"%s\",\"approvalReference\":\"TEST-TICKET-1\"}".formatted(partnerId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.assignments.length()").value(1))
                 .andExpect(jsonPath("$.assignments[0].partnerUserId").doesNotExist());
@@ -164,14 +170,14 @@ class ProductJourneyTest extends IntegrationTest {
 
         mvc.perform(post("/api/admin/products/{id}/assignments", productId).with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"partnerId\":\"%s\",\"partnerUserId\":\"%s\"}".formatted(partnerId, userId)))
+                        .content("{\"partnerId\":\"%s\",\"partnerUserId\":\"%s\",\"approvalReference\":\"TEST-TICKET-2\"}".formatted(partnerId, userId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.assignments[0].partnerUserEmail").value("journey.user@scope.in"));
 
         // Assigning the same user twice is refused.
         mvc.perform(post("/api/admin/products/{id}/assignments", productId).with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"partnerId\":\"%s\",\"partnerUserId\":\"%s\"}".formatted(partnerId, userId)))
+                        .content("{\"partnerId\":\"%s\",\"partnerUserId\":\"%s\",\"approvalReference\":\"TEST-TICKET-2\"}".formatted(partnerId, userId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("ALREADY_ASSIGNED"));
 
@@ -183,7 +189,7 @@ class ProductJourneyTest extends IntegrationTest {
                 .andReturn().getResponse().getContentAsString(), "$.id");
         mvc.perform(post("/api/admin/products/{id}/assignments", productId).with(admin())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"partnerId\":\"%s\",\"partnerUserId\":\"%s\"}".formatted(partnerId, otherUserId)))
+                        .content("{\"partnerId\":\"%s\",\"partnerUserId\":\"%s\",\"approvalReference\":\"TEST-TICKET-3\"}".formatted(partnerId, otherUserId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("USER_NOT_IN_ORGANIZATION"));
     }

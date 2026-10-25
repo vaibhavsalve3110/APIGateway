@@ -39,6 +39,10 @@ class TryItTest extends IntegrationTest {
                         """.formatted(partnerCode)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         apiId = JsonPath.read(api, "$.id");
+        // A create lands as a draft now, and a draft is invisible to partners — which is the point
+        // of it. These tests are about what a partner sees, so the API has to be published first.
+        mvc.perform(post("/api/admin/apis/{id}/enable", apiId).with(admin()))
+                .andExpect(status().isOk());
         String key = mvc.perform(post("/api/partner/keys/SANDBOX").with(partnerUser(partnerCode)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         sandboxKey = JsonPath.read(key, "$.plaintext");

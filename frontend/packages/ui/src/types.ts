@@ -305,3 +305,86 @@ export interface AuditView {
   objectId: string | null;
   detail: string | null;
 }
+
+// --------------------------------------------------------------------------- products (CP-API-09)
+
+/**
+ * One API in a product's journey. The order is the journey: step 1, step 2, and so on.
+ *
+ * `dependsOnApiId` records that a step cannot be called until another has been, which is the thing
+ * partners most often get wrong when integrating several APIs in sequence.
+ */
+export interface StepView {
+  step: number;
+  apiId: string;
+  apiName: string;
+  category: string | null;
+  httpMethod: string | null;
+  proxyPath: string | null;
+  /** The API's own status. A draft step is invisible to partners until the API is published. */
+  status: string | null;
+  apiDescription: string | null;
+  /** Why this step is here, in the words of whoever built the product. */
+  note: string | null;
+  dependsOnApiId: string | null;
+  dependsOnApiName: string | null;
+}
+
+/** A product mapped to an organization, or to one named person inside it (CP-PTN-03). */
+export interface AssignmentView {
+  id: string;
+  partnerId: string;
+  partnerCode: string | null;
+  partnerName: string | null;
+  /** Null means the whole organization; set narrows this mapping to one person. */
+  partnerUserId: string | null;
+  partnerUserEmail: string | null;
+  assignedBy: string;
+  assignedAt: string;
+  /** CP-PTN-03: the authority for this mapping — a ticket, e-mail or note reference. */
+  approvalReference: string;
+}
+
+export interface ProductView {
+  id: string;
+  name: string;
+  /** Appears in Developer Portal URLs, so it is derived from the name and kept unique. */
+  slug: string;
+  summary: string | null;
+  description: string | null;
+  journeyMarkdown: string | null;
+  status: "DRAFT" | "PUBLISHED" | string;
+  steps: StepView[];
+  assignments: AssignmentView[];
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  publishedAt: string | null;
+}
+
+export interface StepRequest {
+  apiId: string;
+  note: string | null;
+  dependsOnApiId: string | null;
+}
+
+export interface ProductRequest {
+  name: string;
+  summary: string | null;
+  description: string | null;
+  journeyMarkdown: string | null;
+  steps: StepRequest[];
+}
+
+/** What a partner sees. Only live APIs appear as steps, so a draft step is simply absent. */
+export interface PartnerProductView {
+  id: string;
+  name: string;
+  slug: string;
+  summary: string | null;
+  description: string | null;
+  journeyMarkdown: string | null;
+  steps: StepView[];
+  /** True when the product was mapped to this person by name rather than to the organization. */
+  assignedToYouDirectly: boolean;
+}

@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Response, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -54,6 +54,18 @@ class ProductRequest(BaseModel):
 class AssignRequest(BaseModel):
     partnerId: uuid.UUID  # noqa: N815
     partnerUserId: uuid.UUID | None = None  # noqa: N815
+    #: CP-PTN-03: the authority for this mapping — a ticket number, an e-mail subject, a note id.
+    #: Required, and free text on purpose: the platform cannot verify a ticket number, and
+    #: validating a format that will change would buy nothing. Refusing a mapping without one is
+    #: what makes the trail answer "who authorised this", which the audit trail alone does not.
+    approvalReference: str = Field(min_length=1, max_length=200)  # noqa: N815
+
+    @field_validator("approvalReference")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("an approval reference is required")
+        return value.strip()
 
 
 # --------------------------------------------------------------------------- helpers
@@ -198,6 +210,7 @@ async def _assignments_of(conn: AsyncConnection, product_id: uuid.UUID) -> list[
             f"""
             SELECT a.id, a.partner_id, p.code AS partner_code, p.name AS partner_name,
                    a.partner_user_id, u.email AS partner_user_email, a.assigned_by,
+                   a.approval_reference,
                    {instant_column('a.assigned_at', 'assigned_at')}
               FROM product_assignment a
               LEFT JOIN partner p ON p.id = a.partner_id
@@ -217,6 +230,7 @@ async def _assignments_of(conn: AsyncConnection, product_id: uuid.UUID) -> list[
             "partnerUserId": str(r.partner_user_id) if r.partner_user_id else None,
             "partnerUserEmail": r.partner_user_email,
             "assignedBy": r.assigned_by,
+            "approvalReference": r.approval_reference,
             "assignedAt": java_instant(r.assigned_at),
         }
         for r in rows
@@ -491,8 +505,9 @@ async def assign_product(
             text(
                 """
                 INSERT INTO product_assignment
-                    (id, product_id, partner_id, partner_user_id, assigned_by, assigned_at)
-                VALUES (:id, :product_id, :partner_id, :user_id, :by, :now)
+                    (id, product_id, partner_id, partner_user_id, assigned_by, assigned_at,
+                     approval_reference)
+                VALUES (:id, :product_id, :partner_id, :user_id, :by, :now, :reference)
                 """
             ),
             {
@@ -502,6 +517,7 @@ async def assign_product(
                 "user_id": str(user.id) if user else None,
                 "by": actor.username,
                 "now": datetime.now(UTC),
+                "reference": request.approvalReference,
             },
         )
         who = f"{partner.name} (whole organization)" if user is None else f"{user.email} at {partner.name}"
@@ -512,7 +528,9 @@ async def assign_product(
             action="ASSIGN",
             object_type=AUDIT_TYPE,
             object_id=str(product_id),
-            detail=f"Product {product.name} assigned to {who}",
+            # The reference goes in the detail as well as the column: the audit trail is what gets
+            # exported for a review, and a mapping's authority is the first thing asked about.
+            detail=f"Product {product.name} assigned to {who} — authority: {request.approvalReference}",
         )
         return await _view(conn, product_id)
 
@@ -530,7 +548,8 @@ async def unassign_product(
             await conn.execute(
                 text(
                     """
-                    SELECT a.id, p.name AS partner_name, u.email AS user_email
+                    SELECT a.id, p.name AS partner_name, u.email AS user_email,
+                           a.approval_reference
                       FROM product_assignment a
                       LEFT JOIN partner p ON p.id = a.partner_id
                       LEFT JOIN partner_user u ON u.id = a.partner_user_id
@@ -554,7 +573,12 @@ async def unassign_product(
             action="UNASSIGN",
             object_type=AUDIT_TYPE,
             object_id=str(product_id),
-            detail=f"Product {product.name} withdrawn from {who}",
+            # Naming the authority that is being undone, because the row holding it is now gone and
+            # the trail is the only remaining record of what the access had been granted under.
+            detail=(
+                f"Product {product.name} withdrawn from {who}"
+                f" — had been authorised by: {assignment.approval_reference}"
+            ),
         )
         return await _view(conn, product_id)
 

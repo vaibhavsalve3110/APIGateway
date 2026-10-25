@@ -7,6 +7,74 @@ Database changes are Flyway migrations in `backend/src/main/resources/db/migrati
 in order, and are recorded in `apim.flyway_schema_history`. The one-time PostgreSQL setup script is
 `infra/postgres/local-setup.sql`.
 
+## 2026-10-25
+
+### Products and access mapping, with the authority for every grant
+
+The backend for API products was complete and had no screens: `/products` and `/mapping` were both
+`ComingSoon`, and the Developer Portal had no products page at all — so anything mapped to a partner
+was invisible to them. Three screens now, and the mapping carries its evidence.
+
+**Products** (CP-API-09) — list, create and edit. A product is an ordered journey through several
+APIs: the order of the steps *is* the journey, so moving a row is the whole interaction. Each step
+takes a note saying why it is there and may name an earlier step it depends on; the dependency
+dropdown offers only *earlier* steps, because a dependency on a later one describes a journey that
+cannot be followed in the order given. Publishing is not reviewed — a product is documentation and an
+access grouping, not a route on the gateway, and products are administrator-only.
+
+The list flags a published product whose steps are not all live APIs. A partner's view lists only
+live steps, so that combination shows them an empty journey, which looks like a broken page rather
+than an incomplete product.
+
+**Access mapping** (CP-PTN-03) — which organizations may use which product, to a whole organization
+or to one named person inside it for a pilot. **Every mapping requires an approval reference**:
+migration `V9` adds `product_assignment.approval_reference` as `NOT NULL`, and both services refuse a
+mapping without one. Free text on purpose — the platform cannot verify a ticket number, and
+validating a format that will change would buy nothing. What it can do is refuse to save without
+one, which is what makes the trail answer *who authorised this* rather than only who clicked. The
+reference is stored on the mapping, shown in the mapping list, and written into the audit trail;
+withdrawing a mapping records the authority it had been granted under, since the row holding it is
+then gone.
+
+Mapping a draft product is allowed deliberately: the access decision and the publishing decision are
+separate, and lining mappings up before launch is the normal order of work. The table says plainly
+when a product is not published.
+
+**Developer Portal → Products** — the partner's side, without which none of the above is visible to
+its audience. Only published products mapped to that organization appear, each with its steps, the
+APIs they call, the dependency spelled out in words, and the integration guide.
+
+Not group-level: `V9` keeps the existing organization-and-user model rather than adding partner
+groups, which the nav text had described. A migration for groups would also need a rule for an
+organization assigned both directly and through a group.
+
+**Java was updated alongside Python**, as it must be — the two share one database and the column is
+`NOT NULL`, so leaving Java's insert alone would have made its assign endpoint fail at runtime. Its
+entity, request and view all carry the reference now, and `check_products.py` asserts the two
+services still read a mapping identically.
+
+**Corrections to the 2026-10-22 entry below.** Two claims there were wrong:
+
+- it said Java's test suite passed. The final Java build that day used `-DskipTests`, and the suite
+  did **not** pass: `ApiLifecycleTest` still asserted that a new API is `ACTIVE`, which the
+  draft-on-create change had made false. Fixed, along with `TryItTest` and `ProductJourneyTest`,
+  which created APIs and then expected partners to see them — a draft is invisible, which is the
+  point of it, so those tests now publish first. All 64 Java tests pass.
+- the dev-server proxy default was `http://localhost:8088`, where nothing listens once the backends
+  run in containers, so `npm run dev` proxied into a closed port. Both portals now default to
+  `127.0.0.1:18090` — backend-python as the stack publishes it, which is where nginx sends every
+  admin route and the only service with Approvals and APIM users.
+
+**These screens were verified in a browser**, which nothing since the Swagger work has been: a
+product built through the editor, mapped to Acme Fintech with a reference, published, confirmed
+visible to that partner in the Developer Portal with both steps, then unmapped and deleted. One bug
+came out of it — the mapping screen rendered "no products yet, create one" while the list was still
+loading, telling an administrator to create something they already had.
+
+**After pulling:** rebuild everything (`docker compose --profile app up -d --build`); `V9` runs on
+backend-java's startup. Any mapping made before this is backfilled with a reference that says
+`UNRECORDED`, rather than a default implying an authority it never had.
+
 ## 2026-10-22
 
 ### A failed sign-in e-mail no longer looks like a sent one

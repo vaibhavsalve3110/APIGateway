@@ -1,9 +1,17 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// The backend runs on :8088 by default; override with API_TARGET=http://host:port.
+// Where /api goes in development. Override with API_TARGET=http://host:port.
+//
+// 127.0.0.1:18090 is backend-python as the container stack publishes it, which is the right default
+// now: nginx routes every admin route there, and Approvals and APIM users exist only on that
+// service. It used to default to :8088, which nothing listens on once the backends run in
+// containers — so `npm run dev` proxied into a closed port.
+//
+// For the Java control plane instead, API_TARGET=http://127.0.0.1:18088.
+//
 // "^/api/" (not "/api") so SPA routes such as /apis are served by Vite, not proxied.
-const target = process.env.API_TARGET ?? "http://localhost:8088";
+const target = process.env.API_TARGET ?? "http://127.0.0.1:18090";
 
 export default defineConfig({
   plugins: [react()],

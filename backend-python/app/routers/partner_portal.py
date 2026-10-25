@@ -432,7 +432,11 @@ async def partner_products(
     principal: Principal = Depends(current_principal),
     conn: AsyncConnection = Depends(connection),
 ) -> list[dict[str, Any]]:
-    """Products assigned to the signed-in partner, directly or through their group."""
+    """Published products assigned to the signed-in partner's organization, or to them personally.
+
+    Not "through their group": there is no group-level product assignment, and the docstring used to
+    claim one. A mapping names an organization, optionally narrowed to one user inside it.
+    """
     partner = await _current_partner(conn, principal)
     return await _visible_products(conn, partner, principal)
 

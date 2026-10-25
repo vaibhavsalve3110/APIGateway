@@ -18,13 +18,18 @@ import com.jayway.jsonpath.JsonPath;
 class ApiLifecycleTest extends IntegrationTest {
 
     @Test
-    void newApiIsHiddenFromGuestsAndSyncedToTheGateway() throws Exception {
+    void newApiIsADraftHiddenFromGuestsAndSyncedToTheGateway() throws Exception {
         String body = createApi("/v1/test/guest-default");
         String id = JsonPath.read(body, "$.id");
 
         assertThat((Boolean) JsonPath.read(body, "$.guestVisible")).isFalse();      // CP-API-05
-        assertThat((String) JsonPath.read(body, "$.status")).isEqualTo("ACTIVE");
-        assertThat(gateway.calls).contains("syncApi:" + id + ":ACTIVE");
+        // A new API is a draft, whatever the request asked for. It used to be created ACTIVE, which
+        // is a way to publish without anybody reviewing it — publishing goes through the change
+        // request in the Python control plane now, and a create landing ACTIVE would walk past it.
+        assertThat((String) JsonPath.read(body, "$.status")).isEqualTo("DRAFT");
+        // Still pushed to the gateway, which is what *removes* any route for a draft rather than
+        // publishing one. That distinction is why a draft is unreachable.
+        assertThat(gateway.calls).contains("syncApi:" + id + ":DRAFT");
     }
 
     @Test

@@ -27,7 +27,10 @@ const sections: { title: string; items: NavItem[] }[] = [
       { to: "/apis", label: "APIs", icon: icon("M12 3 3 7.5 12 12l9-4.5L12 3ZM3 12l9 4.5 9-4.5M3 16.5l9 4.5 9-4.5") },
       // Both roles: a developer raises requests and watches them, an admin decides them.
       { to: "/approvals", label: "Approvals", icon: icon("m9 11 3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11") },
-      { to: "/products", label: "Products", icon: icon("M21 8v8l-9 5-9-5V8l9-5 9 5ZM3 8l9 5 9-5"), planned: true, adminOnly: true },
+      { to: "/products", label: "Products", icon: icon("M21 8v8l-9 5-9-5V8l9-5 9 5ZM3 8l9 5 9-5"), adminOnly: true },
+      // A link, not a tick: Approvals already owns the tick, and two identical icons beside each
+      // other in one section is a worse problem than an imperfect metaphor.
+      { to: "/mapping", label: "Access Mapping", icon: icon("M10 13a5 5 0 0 0 7.1 0l3-3a5 5 0 0 0-7.1-7.1l-1.7 1.7M14 11a5 5 0 0 0-7.1 0l-3 3a5 5 0 0 0 7.1 7.1l1.7-1.7"), adminOnly: true },
     ],
   },
   {
@@ -35,7 +38,6 @@ const sections: { title: string; items: NavItem[] }[] = [
     items: [
       { to: "/partners", label: "Groups & Partners", icon: icon("M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 4.3a3.2 3.2 0 1 1 0 6.4 3.2 3.2 0 0 1 0-6.4"), adminOnly: true },
       { to: "/partner-users", label: "Partner Users", icon: icon("M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 3.5a3.2 3.2 0 1 1 0 6.4 3.2 3.2 0 0 1 0-6.4M23 21v-2a4 4 0 0 0-3-3.9M16 3.6a4 4 0 0 1 0 7.8"), adminOnly: true },
-      { to: "/mapping", label: "Access Mapping", icon: icon("m9 11 3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"), planned: true, adminOnly: true },
       { to: "/domains", label: "Domains", icon: icon("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20ZM2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"), planned: true, adminOnly: true },
     ],
   },

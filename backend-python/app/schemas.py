@@ -177,10 +177,15 @@ class AssignmentView(BaseModel):
     partnerId: str  # noqa: N815
     partnerCode: str | None  # noqa: N815
     partnerName: str | None  # noqa: N815
-    partnerUserId: str | None  # noqa: N815
+    partnerUserId: str | None = Field(  # noqa: N815
+        default=None, description="Null means the whole organization; set narrows it to one person"
+    )
     partnerUserEmail: str | None  # noqa: N815
     assignedBy: str  # noqa: N815
     assignedAt: str  # noqa: N815
+    approvalReference: str = Field(  # noqa: N815
+        description="CP-PTN-03: the authority for this mapping — a ticket, e-mail or note reference"
+    )
 
 
 class ProductView(BaseModel):

@@ -36,17 +36,28 @@ public class ProductAssignment {
     @Column(name = "assigned_at", nullable = false)
     private Instant assignedAt;
 
+    /**
+     * CP-PTN-03: the authority for this mapping — a ticket, e-mail or note reference.
+     *
+     * <p>Free text, and required. The platform cannot verify a ticket number, so validating a format
+     * that will change would buy nothing; refusing a mapping without one is what makes the trail
+     * answer "who authorised this", which the audit trail alone does not.
+     */
+    @Column(name = "approval_reference", nullable = false)
+    private String approvalReference;
+
     protected ProductAssignment() {
     }
 
     public ProductAssignment(UUID id, UUID productId, UUID partnerId, UUID partnerUserId, String assignedBy,
-                             Instant now) {
+                             Instant now, String approvalReference) {
         this.id = id;
         this.productId = productId;
         this.partnerId = partnerId;
         this.partnerUserId = partnerUserId;
         this.assignedBy = assignedBy;
         this.assignedAt = now;
+        this.approvalReference = approvalReference;
     }
 
     public boolean isWholeOrganization() {
@@ -75,5 +86,9 @@ public class ProductAssignment {
 
     public Instant getAssignedAt() {
         return assignedAt;
+    }
+
+    public String getApprovalReference() {
+        return approvalReference;
     }
 }
