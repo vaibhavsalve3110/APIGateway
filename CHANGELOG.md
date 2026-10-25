@@ -9,6 +9,50 @@ in order, and are recorded in `apim.flyway_schema_history`. The one-time Postgre
 
 ## 2026-10-25
 
+### The payload keypair could not be configured at all
+
+Writing the operations runbook turned up three configuration defects, all of which would have been
+found the hard way during a production deployment.
+
+**`PAYLOAD_PRIVATE_KEY` and `PAYLOAD_ENCRYPTION_ENFORCED` never reached the containers.** Both
+services read them — added with payload encryption on 2026-10-21 — but `docker-compose.yml` passed
+neither. So a containerised deployment had no way to supply the keypair: it silently used the
+development one committed to this repository, and under a production profile both services simply
+refused to start. Now passed to both, from `infra/.env`.
+
+**`SPRING_PROFILES_ACTIVE` was hardcoded to `demo`** while `ENVIRONMENT` on backend-python was
+overridable. The two decide the same things — whether a missing secret is fatal, and whether payload
+encryption is enforced — so a stack could be switched to production on one service and not the
+other, which is exactly what the comment beside `ENVIRONMENT` warns against. Now overridable.
+
+**`infra/.env.example` was four values and a comment**, missing `AUTH_JWT_SECRET` — which compose
+marks required, so copying the example and starting the stack failed immediately — along with the
+database host, the schema, every mail setting and all three secrets. Rewritten: every value the
+stack reads, what it does, how to generate it, and what breaks when the two services disagree.
+
+Verified by generating a real RSA keypair, configuring it, and confirming both services then
+reported the **same new key id** rather than the development one — which also demonstrates the two
+deriving an identical key id from a configured key, not just from the fallback.
+
+One trap worth knowing, found while testing this: a PEM pasted into `.env` with its real newlines
+does not merely fail to load. `.env` takes one `KEY=VALUE` per line, so **every `docker compose`
+command then fails** with a parse error naming a line of base64, and the stack can be neither
+started nor stopped until it is fixed. Both `awk` and `sed` turned the `
+` escape back into real
+newlines when escaping it; the runbook gives a one-liner that does not.
+
+### An operations runbook
+
+Three tabs — configuring the platform from nothing, watching it once it runs, and what has to change
+before production: https://claude.ai/artifact/XNVaCsEKsxnpfgJKH7SNqY
+
+The production tab ends with the open gaps, stated plainly: the approval workflow can be bypassed on
+backend-java's port, `KeyExpiryJob` ownership is unsettled, Flyway lives in a service that cannot
+therefore be dropped, outbound SMTP is blocked, and nothing can be published until a second
+administrator exists.
+
+## 2026-10-25 — products
+
 ### Products and access mapping, with the authority for every grant
 
 The backend for API products was complete and had no screens: `/products` and `/mapping` were both

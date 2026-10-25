@@ -136,7 +136,11 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      SPRING_PROFILES_ACTIVE: demo
+      # Overridable, because it was hardcoded while ENVIRONMENT on backend-python was not: the two
+      # decide the same thing — whether a missing secret is fatal and whether encryption is enforced
+      # — so a stack could be switched to production on one service and not the other. Set BOTH
+      # (SPRING_PROFILES_ACTIVE=prod and ENVIRONMENT=production) or neither.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}
       # Schema is named explicitly rather than by activating the 'local' profile, which would also
       # switch on header-based dev authentication and switch off gateway sync — neither wanted here.
       DB_URL: jdbc:postgresql://${DB_HOST:-host.docker.internal}:${DB_PORT:-5432}/apigw?currentSchema=${DB_SCHEMA:-apim}
@@ -168,6 +172,13 @@ services:
       # no effect here. Its yml default is true, which is why 587 worked anyway.
       SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
       MAIL_FROM: ${MAIL_FROM:-no-reply@apigw.local}
+      # Payload encryption. **The same key must reach backend-python below**: nginx routes portal
+      # traffic between the two per path, so a payload encrypted once may arrive at either. Both
+      # services read these and neither was given them, so a containerised deployment had no way to
+      # configure the keypair at all — it silently used the development one committed to the repo,
+      # and under a production profile simply refused to start.
+      PAYLOAD_PRIVATE_KEY: ${PAYLOAD_PRIVATE_KEY:-}
+      PAYLOAD_ENCRYPTION_ENFORCED: ${PAYLOAD_ENCRYPTION_ENFORCED:-false}
       PUBLIC_SANDBOX_URL: https://sandbox-api.apigw.com
     # 18088 on the host is for the parity harness and ad-hoc debugging only; partner and portal
     # traffic always arrives through nginx.
@@ -230,6 +241,10 @@ services:
       # Whether the new key itself goes to the Partner Admins. backend-java reads this from the
       # environment too, so leaving it out here let the two services disagree about it.
       EMAIL_KEY_TO_ADMIN: ${EMAIL_KEY_TO_ADMIN:-true}
+      # Payload encryption, the same two values backend-java above is given. They must be identical:
+      # the portal encrypts to one public key and nginx decides which service decrypts it.
+      PAYLOAD_PRIVATE_KEY: ${PAYLOAD_PRIVATE_KEY:-}
+      PAYLOAD_ENCRYPTION_ENFORCED: ${PAYLOAD_ENCRYPTION_ENFORCED:-false}
       # Deliberately not passed: TOKEN_TTL_HOURS, OTP_TTL_MINUTES, OTP_LENGTH, the OTP rate limits
       # and KEY_OVERLAP_MINUTES. This service reads all of them, but backend-java hardcodes the
       # equivalents in application.yml (token-ttl PT8H, otp-ttl PT5M, resend-cooldown PT30S,
