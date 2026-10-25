@@ -43,8 +43,17 @@ newlines when escaping it; the runbook gives a one-liner that does not.
 
 ### An operations runbook
 
-Three tabs — configuring the platform from nothing, watching it once it runs, and what has to change
-before production: https://claude.ai/artifact/XNVaCsEKsxnpfgJKH7SNqY
+Three documents in `docs/operations/` — configuring the platform from nothing, watching it once it
+runs, and what has to change before production. Also published as a shared document at
+https://claude.ai/artifact/XNVaCsEKsxnpfgJKH7SNqY; the copies in the repository are the ones that
+version with the code.
+
+Writing them corrected a count this project had been repeating: **backend-python has no scheduler at
+all**, so all three of Java's background jobs are load-bearing, not just the key-expiry one.
+`OtpCleanupJob` clears expired sign-in codes hourly and `ErrorRetentionJob` prunes the error log on
+a cron; without them the OTP table grows without bound and the error log never ages out. What is
+actually unported is two endpoints — the Swagger/Postman import and Try it live — plus Flyway,
+those three jobs and the demo seeder.
 
 The production tab ends with the open gaps, stated plainly: the approval workflow can be bypassed on
 backend-java's port, `KeyExpiryJob` ownership is unsettled, Flyway lives in a service that cannot
