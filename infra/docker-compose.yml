@@ -253,6 +253,9 @@ services:
       # the portal encrypts to one public key and nginx decides which service decrypts it.
       PAYLOAD_PRIVATE_KEY: ${PAYLOAD_PRIVATE_KEY:-}
       PAYLOAD_ENCRYPTION_ENFORCED: ${PAYLOAD_ENCRYPTION_ENFORCED:-false}
+      # Whether /swagger-ui.html, /redoc and /v3/api-docs exist. Unset follows ENVIRONMENT: served
+      # everywhere except production. Set it to true to keep the reference in production anyway.
+      DOCS_ENABLED: ${DOCS_ENABLED:-}
       # Deliberately not passed: TOKEN_TTL_HOURS, OTP_TTL_MINUTES, OTP_LENGTH, the OTP rate limits
       # and KEY_OVERLAP_MINUTES. This service reads all of them, but backend-java hardcodes the
       # equivalents in application.yml (token-ttl PT8H, otp-ttl PT5M, resend-cooldown PT30S,
@@ -294,9 +297,24 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      # Strict-Transport-Security, rendered into the config by the nginx image's envsubst
+      # entrypoint. **Always declared, even when empty**: an undefined variable would be left in
+      # the rendered file literally and served as the header value. Empty means nginx omits the
+      # header, which is what a developer machine wants — the certificate here is self-signed and
+      # the names sit under a domain nobody here owns, so pinning them to https in the browser
+      # would outlive the stack. Production sets:
+      #
+      #   NGINX_HSTS=max-age=31536000; includeSubDomains
+      NGINX_HSTS: ${NGINX_HSTS:-}
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/proxy.conf:/etc/nginx/proxy.conf:ro
+      # The shared response headers and the three Content-Security-Policy variants.
+      - ./nginx/snippets:/etc/nginx/snippets:ro
+      # Rendered to /etc/nginx/conf.d at start-up. Without this mount nginx will not start, which is
+      # deliberate: see snippets/security-headers.conf.
+      - ./nginx/templates:/etc/nginx/templates:ro
       - ./docker/certs:/etc/nginx/certs:ro
     healthcheck:
       test: ["CMD", "nginx", "-t"]

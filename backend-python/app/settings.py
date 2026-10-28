@@ -63,6 +63,29 @@ class Settings(BaseSettings):
     # than from /ui. Off by default, and ignored under the production profile.
     local_ui_cors: bool = Field(default=False, alias="LOCAL_UI_CORS")
 
+    # Whether /swagger-ui.html, /redoc and /v3/api-docs are served. Unset follows the profile: on
+    # everywhere except production, where a complete, authenticated-route-by-authenticated-route map
+    # of the control plane is reconnaissance handed to whoever asks. Set DOCS_ENABLED=true to serve
+    # it in production anyway — a deliberate decision, for a deployment that keeps this port
+    # internal — or DOCS_ENABLED=false to switch it off on a developer machine.
+    docs_enabled_override: bool | None = Field(default=None, alias="DOCS_ENABLED")
+
+    @field_validator("docs_enabled_override", mode="before")
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        """`DOCS_ENABLED=` in a .env file, or `${DOCS_ENABLED:-}` in compose with nothing set,
+        arrives as an empty string — which is neither true, false, nor absent, and would otherwise
+        fail the boot. Read it as absent and let the profile decide."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @property
+    def docs_enabled(self) -> bool:
+        if self.docs_enabled_override is not None:
+            return self.docs_enabled_override
+        return self.environment != "production"
+
     # --- payload encryption (VAPT). The RSA private key that unwraps the AES key on every encrypted
     # portal payload. **backend-java must hold the same one**, because nginx may route a request the
     # portal encrypted to either service. Empty outside production falls back to the development

@@ -129,6 +129,22 @@ development values, which is what lets a developer machine run with no setup. Th
 the repository and are worthless as secrets — the production profile refuses to start without real
 ones, deliberately.
 
+### Two hardening settings in the same file
+
+Both are in `.env.example` and both should be left exactly as they come for local work.
+
+`NGINX_HSTS` is empty, and must stay empty here. It is the `Strict-Transport-Security` header nginx
+serves, and the local certificate is self-signed on names under a domain nobody running this stack
+owns — so a browser told to pin them to https keeps doing it for the full `max-age` after the
+containers are gone, with no way to serve plaintext again and clear it. Set it only with a real
+certificate on real names. Leave the line present, even empty: nginx renders it with `envsubst`, and
+an undefined variable ends up in the config literally, served as the header's value.
+
+`DOCS_ENABLED` is commented out, which means the profile decides: the API reference at
+`/swagger-ui.html` is served everywhere except production. Uncommenting it as `true` keeps the
+reference in a production deployment — reasonable where the control plane's port stays internal, and
+a decision to make on purpose rather than by default.
+
 ## Step 3 — start the stack
 
 First the TLS certificate, once. On a developer machine this is a self-signed CA and a server
@@ -261,21 +277,31 @@ unknown id gives 404), both gateways are live and asking for a key, and an unkno
 refused outright. Anything other than `passed 22, failed 0` is a real problem, and the line that
 failed says which.
 
-For a deeper check, the twelve test gates exercise the lifecycles against both services and clean up
-after themselves:
+For a deeper check, the eighteen test gates exercise the lifecycles against both services and clean
+up after themselves. Use the virtualenv's interpreter, not the system one — a gate run against a
+Python without the dependencies installed exits before it asserts anything, and a loop that only
+looks at the output reads that as a pass:
 
 ```bash
-cd backend-python && for f in tests/check_*.py; do .venv/Scripts/python "$f"; done
+cd backend-python && for f in tests/check_*.py; do .venv/Scripts/python "$f" || echo "FAILED $f"; done
 ```
 
 | Gate | What it would catch |
 | --- | --- |
 | `check_roles_and_approvals` | A developer able to publish, or anyone approving their own request |
 | `check_payload_crypto` | Payload encryption accepting a tampered body, or reusing an IV |
+| `check_security_headers` | A missing CSP, an HSTS header that is still `${NGINX_HSTS}`, the API reference served in production, or a dependency the lockfile does not cover |
 | `check_keys` | A rotation that does not keep the old key alive for its overlap |
 | `check_products` | A mapping saved with no approval reference |
 | `check_api_writes` | A draft reachable at the gateway |
 | `check_auth` | A sign-in code that survives a wrong guess, or a session one service rejects |
+
+Twelve of the eighteen compare their answers against `backend-java`, which is retired but kept on
+its own compose profile for exactly that. Bring it up first or those comparisons are skipped:
+
+```bash
+cd infra && docker compose --profile app --profile java up -d
+```
 
 And one that needs no stack running, which is worth putting in CI:
 

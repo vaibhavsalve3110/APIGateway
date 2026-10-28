@@ -75,13 +75,21 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await db.dispose()
 
 
+# The reference is served under every profile but production — see settings.docs_enabled. None on
+# any of these three makes FastAPI leave the route out of the table entirely, so the path 404s like
+# any other unknown one rather than answering with an empty or guarded document.
+_docs = get_settings().docs_enabled
+
 app = FastAPI(
     title="API Gateway platform (Python)",
     description="FastAPI control plane. Serves the same contract as backend-java against the same database.",
     version="0.1.0",
     lifespan=lifespan,
-    docs_url="/swagger-ui.html",
-    openapi_url="/v3/api-docs",
+    docs_url="/swagger-ui.html" if _docs else None,
+    # FastAPI's other documentation page. Nothing links to it and nginx does not proxy it, so it was
+    # reachable only on this service's own port — which is precisely the gap being closed here.
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/v3/api-docs" if _docs else None,
 )
 
 app.include_router(api_admin.router)

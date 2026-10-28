@@ -3,11 +3,87 @@
 Every change to the platform, newest first. Each entry says what changed, why, and anything you must do
 after pulling it (a migration runs itself, but configuration and restarts do not).
 
-Database changes are Flyway migrations in `backend/src/main/resources/db/migration/`; they run at startup,
-in order, and are recorded in `apim.flyway_schema_history`. The one-time PostgreSQL setup script is
-`infra/postgres/local-setup.sql`.
+Database changes are SQL migrations in `backend-python/migrations/`; `backend-python` applies them at
+startup, in order, under an advisory lock, and records them in `apim.flyway_schema_history`. The
+one-time PostgreSQL setup script is `infra/postgres/local-setup.sql`.
 
 ## 2026-10-28
+
+### Security hardening: headers, the banner, the docs, and a lockfile
+
+The five items left over from the VAPT review, done after the migration rather than before it so
+neither change had to be unpicked to understand the other.
+
+**Response headers, on all four hostnames.** They were three — `nosniff`, `X-Frame-Options`,
+`Referrer-Policy` — on the two portal names only, and nothing at all on the two gateway names. Now
+also `Content-Security-Policy`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy`,
+`Permissions-Policy` and `X-Permitted-Cross-Domain-Policies`, from
+`infra/nginx/snippets/security-headers.conf`, included by every site.
+
+**Three content security policies, not one.** A policy strict enough for the portals cannot load the
+API reference, and relaxing the whole site for one page is how a CSP stops meaning anything:
+
+| Served to | Policy |
+| --- | --- |
+| The two portals | `script-src 'self'` — no `'unsafe-inline'`, no `'unsafe-eval'` |
+| `/swagger-ui.html` and `/v3/api-docs` | its own, allowing jsdelivr and the inline bootstrap FastAPI emits |
+| The two gateway names | `default-src 'none'` — they serve API traffic, never a document |
+
+The portals satisfy the strict one as built: one same-origin module script, no inline script in
+`index.html`, and neither bundle calls `eval` or `new Function`. Two concessions remain, both
+explainable: `'unsafe-inline'` in `style-src`, because the components set ~370 inline `style`
+attributes and CSP cannot tell those from an injected one; and Google Fonts, because
+`packages/ui/src/styles.css` `@import`s IBM Plex. Both are written down in the runbook with what it
+would take to remove them.
+
+A location that declares its own CSP loses every `add_header` it would have inherited, so the two
+documentation locations re-include the shared snippet. The gate asserts they still carry it — that
+is a mistake with no visible symptom.
+
+**HSTS is configuration, and empty here on purpose.** `NGINX_HSTS` is rendered into the config by the
+nginx image's `envsubst` entrypoint; empty means nginx omits the header. The local certificate is
+self-signed on names under a domain nobody running this stack owns, so pinning them in a browser
+would outlive the containers with no way to undo it. Production sets
+`NGINX_HSTS=max-age=31536000; includeSubDomains`. Both branches are proven, not assumed: with the
+variable set, all four hostnames serve it.
+
+The variable must always be *declared*, even empty, because an undefined one is left in the rendered
+file literally and served as the header's value — configured-looking and inert. The gate fails on a
+value containing `${`.
+
+**No framework banner.** uvicorn runs with `--no-server-header`. nginx already hid the upstream
+`Server` header, so `Server: uvicorn` only showed on the control plane's own port — which is exactly
+where a scanner reaches it, and it named the framework for free.
+
+**The API reference is absent under the production profile.** `/swagger-ui.html`, `/redoc` and
+`/v3/api-docs` are left out of the route table entirely, so they 404 like any unknown path rather
+than answering with a guarded page. `/redoc` was the one nobody had noticed: nothing links to it and
+nginx does not proxy it, so it was reachable only on the service's own port. `DOCS_ENABLED=true`
+puts all three back for a deployment that keeps that port internal.
+
+**Dependencies are pinned and hashed.** `backend-python/requirements.lock` lists all 32 packages the
+image installs, each with a sha256; the Dockerfile installs with `--require-hashes` instead of
+resolving `pyproject.toml`'s ranges at build time. Regenerate with `backend-python/tools/relock.sh`,
+which resolves inside the same base image the Dockerfile uses — the answer is platform-specific —
+using pip's own `--report` output rather than a new tool.
+
+This was not theoretical. Rebuilding against the lock moved **nine** packages from what the previous
+image had, on ranges alone and with no change to `pyproject.toml`: `pydantic` 2.13.5 → 2.14.1,
+`pydantic-core` 2.46.5 → 2.50.1, `sqlalchemy` 2.0.54 → 2.0.55, `certifi` 2026.7.22 → 2026.10.23, and
+five more. `sbom/backend-python.cdx.json` is regenerated, and now describes a build that can be
+reproduced.
+
+**The gate:** `backend-python/tests/check_security_headers.py`, 63 assertions. It builds the app
+twice in the running container, once per profile, rather than reading the source and believing it —
+and it checks the demo profile *does* serve the three documentation paths, because without that the
+production check would pass just as well if they had never existed.
+
+Nothing to do after pulling this for local work. For a deployment: set `NGINX_HSTS`, and decide
+`DOCS_ENABLED`. `infra/.env.example` and both runbooks carry the detail.
+
+Verified: 18 of 18 gates (519 assertions, `backend-java` up for the twelve that compare against it),
+22 of 22 sanity checks, ruff clean, and the headers confirmed on all four hostnames with HSTS both
+unset and set.
 
 ### backend-java is retired
 

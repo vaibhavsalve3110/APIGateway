@@ -1,0 +1,10 @@
+# Rendered to /etc/nginx/conf.d/hsts.conf at container start by the nginx image's
+# 20-envsubst-on-templates.sh. Do not include this file directly — include the rendered one.
+#
+# NGINX_HSTS empty (the default, and what a developer machine wants) leaves the value empty, and
+# nginx omits an add_header whose value is empty. Production sets:
+#
+#   NGINX_HSTS=max-age=31536000; includeSubDomains
+#
+# Add `preload` only once you are prepared for it to be irreversible for up to a year.
+add_header Strict-Transport-Security "${NGINX_HSTS}" always;

@@ -27,6 +27,17 @@ services, so setting one leaves the platform half in production.
 | `PUBLIC_SANDBOX_URL` | the local name | your sandbox URL | Shown to partners as the base URL to call |
 | `TRY_IT_MODE` | `GATEWAY` | `GATEWAY` | `SIMULATE` answers from documentation instead of really calling |
 | `KEYCLOAK_ADMIN_PASSWORD` | `admin` | generated, or drop the service | Nothing connects to Keycloak today |
+| `NGINX_HSTS` | empty | `max-age=31536000; includeSubDomains` | Empty means no HSTS header. Empty is correct locally — see below |
+| `DOCS_ENABLED` | unset | unset | Unset follows the profile, which switches the API reference off in production |
+
+**`NGINX_HSTS` is empty on purpose outside production.** The local certificate is self-signed and
+the four names are under a domain nobody running the stack owns, so a browser told to pin them to
+https keeps doing it for the full `max-age` after the containers are gone, with no way to serve
+plaintext again and clear it. It is the one setting here whose wrong value follows someone home.
+
+It must always be *declared*, even as an empty value, because nginx renders it with `envsubst`: an
+undefined variable is left in the rendered file literally and served as the header's value, which
+looks configured and does nothing. `check_security_headers` fails on exactly that.
 
 Under the production profile a missing `AUTH_JWT_SECRET`, `CRYPTO_MASTER_KEY` or
 `PAYLOAD_PRIVATE_KEY` **stops the service starting**. That is deliberate: the alternative is running
@@ -91,6 +102,64 @@ What must not be reachable: **the control planes' own ports**. In the compose ar
 published on `127.0.0.1` for the test harness. If port 8088 is reachable in production, the approval
 workflow can be bypassed — see the gaps below.
 
+## What is hardened, and what the hardening does not cover
+
+A VAPT engagement will ask about each of these, so here is what is set and why.
+
+**Response headers**, on all four hostnames, from `infra/nginx/snippets/`:
+
+| Header | Value | What it buys |
+| --- | --- | --- |
+| `Content-Security-Policy` | per site — see below | The one that matters |
+| `Strict-Transport-Security` | from `NGINX_HSTS`; empty locally | No downgrade to http |
+| `X-Content-Type-Options` | `nosniff` | An uploaded OpenAPI file is not guessed to be HTML |
+| `X-Frame-Options` | `DENY` | Clickjacking; `frame-ancestors` repeats it for modern browsers |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | A partner id in a URL does not leave in a referer |
+| `Cross-Origin-Opener-Policy` | `same-origin` | No cross-origin window handle on these documents |
+| `Permissions-Policy` | camera, microphone, geolocation and the rest denied | An injected script cannot reach hardware either |
+| `X-Permitted-Cross-Domain-Policies` | `none` | Legacy Flash/Acrobat policy files |
+
+There are **three** content security policies, because one policy strict enough for the portals
+would not load the API reference, and relaxing the whole site for one page is how a CSP becomes
+decoration:
+
+- **The portals** get `script-src 'self'` with no `'unsafe-inline'` and no `'unsafe-eval'`. This is
+  the directive that turns a stored-XSS finding into a non-event, and the Vite builds satisfy it:
+  one same-origin module script, no inline script in `index.html`, and nothing in either bundle
+  calls `eval` or `new Function`.
+- **The API reference** at `/swagger-ui.html` gets its own, scoped to that location: FastAPI's page
+  is an inline bootstrap script and the bundle comes from jsdelivr. It is not served in production
+  at all.
+- **The two gateway names** get `default-src 'none'`, since they serve partner API traffic and
+  never a document.
+
+Two concessions in the portal policy, both deliberate and worth being able to explain:
+
+- **`'unsafe-inline'` in `style-src`.** The React components set about 370 inline `style`
+  attributes, and CSP cannot tell those from an injected one. Styles are not script, so the
+  residual risk is restyling rather than execution. Removing it means moving those into the
+  stylesheet.
+- **`fonts.googleapis.com` and `fonts.gstatic.com`.** `packages/ui/src/styles.css` `@import`s IBM
+  Plex from Google Fonts — a third-party request from an administrative portal. Self-hosting the
+  two font files would remove both the exception and the request.
+
+**No framework banner.** uvicorn runs with `--no-server-header`, so nothing answers with
+`Server: uvicorn`. nginx hides an upstream's `Server` header anyway, so this only showed through on
+the control plane's own port — which is exactly where a scanner reaches it.
+
+**The API reference is off in production.** `DOCS_ENABLED` unset means `/swagger-ui.html`, `/redoc`
+and `/v3/api-docs` are absent from the route table under the production profile — 404, not a guarded
+page. Set it to `true` for a deployment that keeps the port internal and wants the reference.
+
+**Dependencies are pinned and hashed.** `backend-python/requirements.lock` holds all 32 packages the
+image installs, each with a sha256, and the Dockerfile installs with `--require-hashes`. Two builds
+a month apart now produce the same image, and the SBOM in `sbom/` describes what is actually
+running. Regenerate with `backend-python/tools/relock.sh` after editing `pyproject.toml`.
+
+What this does **not** cover, and nobody should imply otherwise in a report: query strings are still
+unencrypted (deliberate — see the gaps below), there is no metrics endpoint or log shipping, and
+nothing scans the SBOM against a vulnerability feed on a schedule.
+
 ## The cutover
 
 The order is forced by what depends on what.
@@ -101,19 +170,29 @@ The order is forced by what depends on what.
    services will receive identical values.
 3. **etcd, then the gateways.** APISIX will not start without etcd. Two deployments, sandbox and
    production, with different admin keys.
-4. **backend-java.** It runs Flyway, so the schema exists only after this has started once. Watch
-   for `Successfully applied` in its log, then check `/actuator/health`.
-5. **backend-python.** Confirm `/actuator/health`, then that both services serve the **same** payload
-   key id — if these differ, every portal call fails for whichever service did not get the right
-   key:
+4. **backend-python.** It applies the migrations, so the schema exists only after this has started
+   once. Watch for the migration lines in its log, then check `/actuator/health`. If you run more
+   than one instance, start them together without ceremony: each migration takes a PostgreSQL
+   advisory lock, so the second waits rather than racing.
+5. **Confirm the payload keypair took.** Every portal call fails if the service is holding a
+   different key from the one the portal encrypts to:
 
     ```bash
-    curl -s http://<java>:8088/api/crypto/public-key   | grep -o '"kid":"[^"]*"'
     curl -s http://<python>:8090/api/crypto/public-key | grep -o '"kid":"[^"]*"'
     ```
 
-6. **nginx**, with the real certificate and the four names resolving.
-7. **Verify** with `infra/sanity.sh`, pointed at the real host. 22 checks, read-only.
+    Across several instances this must return the same `kid` from each. They derive it from
+    `PAYLOAD_PRIVATE_KEY`, so a difference means one of them did not receive the value.
+
+6. **nginx**, with the real certificate, the four names resolving, and `NGINX_HSTS` set. Confirm the
+   response headers before anything else is pointed at it:
+
+    ```bash
+    curl -sI https://admin.apigw.com/ | grep -iE 'strict-transport|content-security|x-frame'
+    ```
+
+7. **Verify** with `infra/sanity.sh`, pointed at the real host. 22 checks, read-only. Then
+   `backend-python/tests/check_security_headers.py` for the headers, the banner and the docs.
 8. **The first two administrators**, by insert, then everything else through the portal.
 9. **One end-to-end test with a real partner** before any traffic: onboard an API, publish it
    through the approval, register an organization, issue a sandbox key, and have them call it.
@@ -175,6 +254,14 @@ than to discover later.
       and responses. Nothing sensitive travels in a query string today — dates, a status, a partner
       id, a search term — but a VAPT tester will ask, and the answer is "by design, and here is what
       is in them".
+- [x] ~~No security response headers, and a framework banner~~ — closed. CSP, HSTS, COOP,
+      Permissions-Policy and the rest are served on all four hostnames; uvicorn no longer names
+      itself. `check_security_headers` is the gate, and it fails on an unsubstituted `NGINX_HSTS`
+      as well as on a missing one.
+- [x] ~~The API reference is served in every profile~~ — closed. Absent from the route table under
+      the production profile; `DOCS_ENABLED=true` puts it back deliberately.
+- [x] ~~Dependencies resolve at build time~~ — closed. `requirements.lock`, installed with
+      `--require-hashes`.
 - [ ] **No metrics endpoint, no log shipping.** Monitoring is the database and the health probes.
 - [ ] **Keycloak runs and nothing connects to it.** Either drop the service or give it a purpose; an
       unused identity provider with a default password is a finding waiting to happen.

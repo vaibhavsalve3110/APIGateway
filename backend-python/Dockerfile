@@ -3,10 +3,16 @@ FROM python:3.12-slim-bookworm AS build
 WORKDIR /src
 
 # Dependencies are their own layer, so a source edit does not rebuild every wheel.
-COPY pyproject.toml ./
+#
+# From requirements.lock, not from pyproject.toml: the ranges there would resolve differently on
+# every build, which makes the image unreproducible and the SBOM in sbom/ a description of some
+# earlier build. --require-hashes additionally checks each dist against the sha256 in that file, so
+# a substituted or tampered package fails the build. Regenerate with backend-python/tools/relock.sh
+# after changing pyproject.toml.
+COPY requirements.lock ./
 RUN python -m venv /opt/venv \
  && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
- && /opt/venv/bin/pip install --no-cache-dir .
+ && /opt/venv/bin/pip install --no-cache-dir --require-hashes -r requirements.lock
 
 FROM python:3.12-slim-bookworm
 ENV PYTHONUNBUFFERED=1 \
@@ -34,4 +40,9 @@ HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
 
 # One worker: the service is async and the container is the unit of scaling, so extra worker
 # processes here would only multiply database connections.
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8090", "--no-access-log"]
+#
+# --no-server-header drops `Server: uvicorn` from every response. nginx already hides an upstream's
+# Server header, so this only shows through on the control plane's own port — which is exactly where
+# a scanner reaches it, and naming the framework and its version is free reconnaissance.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8090", \
+     "--no-access-log", "--no-server-header"]
