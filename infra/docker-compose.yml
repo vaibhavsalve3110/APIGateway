@@ -179,6 +179,10 @@ services:
       # and under a production profile simply refused to start.
       PAYLOAD_PRIVATE_KEY: ${PAYLOAD_PRIVATE_KEY:-}
       PAYLOAD_ENCRYPTION_ENFORCED: ${PAYLOAD_ENCRYPTION_ENFORCED:-false}
+      # Try it live. Both services defaulted the sandbox URL to localhost:9080, which inside a
+      # container is the container itself, so this could never have worked in this stack.
+      TRY_IT_MODE: ${TRY_IT_MODE:-GATEWAY}
+      TRY_IT_SANDBOX_URL: ${TRY_IT_SANDBOX_URL:-http://apisix-sandbox:9080}
       PUBLIC_SANDBOX_URL: https://sandbox-api.apigw.com
     # 18088 on the host is for the parity harness and ad-hoc debugging only; partner and portal
     # traffic always arrives through nginx.
@@ -218,6 +222,10 @@ services:
       # Shown to partners on an API page; must match what backend-java tells them.
       PUBLIC_SANDBOX_URL: ${PUBLIC_SANDBOX_URL:-https://sandbox-api.apigw.com}
       TRY_IT_MODE: ${TRY_IT_MODE:-GATEWAY}
+      # Where a Try-it-live call actually goes. Both services defaulted this to localhost:9080,
+      # which inside a container is the container itself — so Try it live could never have worked
+      # in this stack, on either control plane. This is the gateway's data port by container name.
+      TRY_IT_SANDBOX_URL: ${TRY_IT_SANDBOX_URL:-http://apisix-sandbox:9080}
       # Both control planes configure the same two gateways, so these must match backend-java's.
       GATEWAY_SYNC_ENABLED: ${GATEWAY_SYNC_ENABLED:-true}
       APISIX_SANDBOX_ADMIN_URL: http://apisix-sandbox:9180

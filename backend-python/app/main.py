@@ -36,6 +36,7 @@ from .routers import (
     partner_users,
     platform_users,
     products,
+    try_it,
     usage,
 )
 from .settings import get_settings
@@ -93,6 +94,7 @@ app.include_router(partner_portal.router)
 app.include_router(partner_users.router)
 app.include_router(platform_users.router)
 app.include_router(products.router)
+app.include_router(try_it.router)
 app.include_router(usage.router)
 
 # Must come after every router: it reads the finished route table. Describes the response shapes and

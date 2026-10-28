@@ -48,6 +48,12 @@ class Settings(BaseSettings):
         default="http://sandbox-api.apigw.com:9080", alias="PUBLIC_SANDBOX_URL"
     )
     try_it_mode: str = Field(default="GATEWAY", alias="TRY_IT_MODE")
+    # Where a Try-it-live call actually goes: the sandbox gateway's data port, reached from inside
+    # the network. Distinct from public_sandbox_url, which is the address shown to the partner —
+    # they differ wherever the gateway is behind a name the service cannot resolve, which is the
+    # normal case. Matches apigw.try-it.sandbox-url on the Java side.
+    try_it_sandbox_url: str = Field(default="http://localhost:9080", alias="TRY_IT_SANDBOX_URL")
+    try_it_timeout_seconds: float = Field(default=10.0, alias="TRY_IT_TIMEOUT_SECONDS")
 
     # Opens the API to any origin, so the local console works when opened straight off disk rather
     # than from /ui. Off by default, and ignored under the production profile.

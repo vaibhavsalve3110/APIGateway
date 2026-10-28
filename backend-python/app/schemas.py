@@ -514,6 +514,20 @@ class PlatformUserView(BaseModel):
     )
 
 
+class TryItResult(BaseModel):
+    """What a Try-it-live call came back with (DP-03)."""
+
+    status: int = Field(description="The status the sandbox returned, not this API's own")
+    latencyMs: int  # noqa: N815
+    headers: dict[str, str]
+    body: str = Field(description="Truncated to 256 KB; `note` says so when it was")
+    simulated: bool = Field(
+        description="True when answered from the documentation rather than a real gateway call"
+    )
+    requestUrl: str = Field(description="The URL a partner would call from their own system")  # noqa: N815
+    note: str | None
+
+
 class PayloadScheme(BaseModel):
     """How to wrap a payload. Described in the response so a client needs no out-of-band document."""
 

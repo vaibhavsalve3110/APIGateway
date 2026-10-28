@@ -117,6 +117,7 @@ RESPONSES: dict[tuple[str, str], Any] = {
     ("get", "/api/partner/pages/{slug}"): s.PublishedPageView,
     ("get", "/api/partner/usage"): s.UsageReport,
     ("get", "/api/partner/usage/logs"): [s.LogEntry],
+    ("post", "/api/partner/apis/{api_id}/try"): s.TryItResult,
     # --- approvals
     ("get", "/api/admin/change-requests"): [s.ChangeRequestView],
     ("get", "/api/admin/change-requests/{request_id}"): s.ChangeRequestView,
