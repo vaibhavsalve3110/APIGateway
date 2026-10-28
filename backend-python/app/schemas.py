@@ -514,6 +514,31 @@ class PlatformUserView(BaseModel):
     )
 
 
+class ImportedOperation(BaseModel):
+    """One operation found in an uploaded file, ready to pre-fill the Add API editor."""
+
+    name: str
+    category: str
+    httpMethod: str  # noqa: N815
+    proxyPath: str  # noqa: N815
+    description: str | None
+    documentation: ApiDocumentation | None
+
+
+class ImportResult(BaseModel):
+    """What an uploaded specification turned into. Nothing is saved — see CP-API-06."""
+
+    format: str = Field(description="OPENAPI or POSTMAN")
+    title: str | None
+    suggestedBackendBaseUrl: str | None = Field(  # noqa: N815
+        default=None, description="The server or base URL the file declared, if any"
+    )
+    operations: list[ImportedOperation]
+    warnings: list[str] = Field(
+        description="What was skipped or could not be followed, including remote $ref"
+    )
+
+
 class TryItResult(BaseModel):
     """What a Try-it-live call came back with (DP-03)."""
 

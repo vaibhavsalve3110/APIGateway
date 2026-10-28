@@ -37,7 +37,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .. import roles
+from .. import importer, roles
 from ..auth import Principal, requires
 from ..common import audit
 from ..common.problem import ApiException
@@ -520,3 +520,20 @@ async def delete_api(
 
     await GatewayClient().remove_api(str(api_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+class ImportRequest(BaseModel):
+    fileName: str | None = Field(default=None, max_length=255)  # noqa: N815
+    content: str = Field(min_length=1, max_length=5_000_000)
+
+
+@router.post("/import")
+async def import_specification(
+    request: ImportRequest, _: Principal = Depends(requires(*roles.ADMIN_ONLY))
+) -> dict[str, Any]:
+    """Read a Swagger / OpenAPI file or a Postman collection into draft operations (CP-API-06).
+
+    Creates nothing. It returns what the file describes so the Add API editor can be pre-filled and
+    a person can decide what to keep — which is why a partially readable file comes back with
+    warnings rather than an error.
+    """
+    return importer.read(request.content)

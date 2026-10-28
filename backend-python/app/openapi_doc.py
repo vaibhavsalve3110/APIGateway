@@ -40,6 +40,7 @@ RESPONSES: dict[tuple[str, str], Any] = {
     # change_requests.py. `objectType` is what tells a caller which it received.
     ("get", "/api/admin/apis"): [s.ApiView],
     ("post", "/api/admin/apis"): s.ApiView,
+    ("post", "/api/admin/apis/import"): s.ImportResult,
     ("get", "/api/admin/apis/{api_id}"): s.ApiView,
     ("put", "/api/admin/apis/{api_id}"): s.ApiOrChangeRequest,
     ("delete", "/api/admin/apis/{api_id}"): None,

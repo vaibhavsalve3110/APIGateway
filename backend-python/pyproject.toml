@@ -17,6 +17,8 @@ dependencies = [
     "httpx>=0.28,<0.29",
     "cryptography>=46,<47",
     "pillow>=11,<12",
+    # Reads Swagger/OpenAPI YAML on import. Always via safe_load — see app/importer.py.
+    "pyyaml>=6,<7",
 ]
 
 [project.optional-dependencies]
