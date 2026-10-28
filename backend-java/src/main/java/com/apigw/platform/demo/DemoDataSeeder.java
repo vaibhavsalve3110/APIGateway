@@ -44,7 +44,10 @@ import com.apigw.platform.usage.UsageRepository;
  * {@code demo} profile and only into an empty database. Partner codes are deterministic (Acme = PTN-00001) because
  * the Keycloak demo realm maps the partner user to that code.
  */
-@Component
+// Disabled: backend-python seeds the demo data now, under the same two guards (not production,
+// and only into an empty database). Both running it would race for the deterministic partner codes.
+// Kept rather than deleted until backend-java is retired, so the fixtures remain readable.
+// @Component
 @Profile("demo")
 class DemoDataSeeder implements ApplicationRunner {
 

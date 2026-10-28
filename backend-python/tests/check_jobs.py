@@ -189,10 +189,31 @@ async def run() -> None:
           await scalar("SELECT count(*) FROM error_event WHERE code = 'ZZ_JOBS_TEST'") == 0)
 
 
-try:
-    asyncio.run(run())
-finally:
-    asyncio.run(dispose())
+async def _cleanup_stragglers() -> None:
+    """Remove anything a previous failed run left behind.
+
+    The cleanup inside run() is skipped when a check raises, and an earlier failure did exactly
+    that — leaving a test organization in the real database. Belt and braces, at both ends.
+    """
+    async with engine().begin() as conn:
+        await conn.execute(text(
+            "DELETE FROM security_key WHERE partner_id IN"
+            " (SELECT id FROM partner WHERE name LIKE 'ZZ Jobs %')"))
+        await conn.execute(text("DELETE FROM partner WHERE name LIKE 'ZZ Jobs %'"))
+        await conn.execute(text("DELETE FROM error_event WHERE code = 'ZZ_JOBS_TEST'"))
+
+
+async def main() -> None:
+    """One event loop for everything: the engine is cached, so a second loop breaks its pool."""
+    try:
+        await _cleanup_stragglers()
+        await run()
+    finally:
+        await _cleanup_stragglers()
+        await dispose()
+
+
+asyncio.run(main())
 
 print()
 print("FAILED" if failures else "all background job checks passed")

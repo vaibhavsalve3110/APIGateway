@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # before the rollout; the service then assumes the schema is already at the right version.
     run_migrations: bool = Field(default=True, alias="RUN_MIGRATIONS")
 
+    # Seed the demo partners, APIs and traffic the screen designs show. Ignored under the
+    # production profile, and only ever written into an empty database.
+    demo_seed_enabled: bool = Field(default=True, alias="DEMO_SEED_ENABLED")
+
     auth_jwt_secret: str = Field(default="", alias="AUTH_JWT_SECRET")
 
     # 32 random bytes, base64. Empty outside production falls back to the same built-in development

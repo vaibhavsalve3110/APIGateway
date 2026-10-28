@@ -5,6 +5,12 @@ spring:
     url: jdbc:h2:mem:apigw;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
     username: sa
     password: ""
+  # Flyway is off by default now that backend-python owns the schema, but an in-memory database
+  # starts with no tables at all — so this profile, which is what the test suite runs under, builds
+  # them from the migrations in their new home. A relative path, resolved from this module.
+  flyway:
+    enabled: true
+    locations: filesystem:../backend-python/migrations
 
 apigw:
   security:

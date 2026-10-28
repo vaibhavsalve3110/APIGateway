@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import IntegrityError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import db, jobs, migrations, openapi_doc
+from . import db, demo_seed, jobs, migrations, openapi_doc
 from .common import errors
 from .common.problem import ApiException, default_code, problem_response
 from .middleware import PayloadEncryptionMiddleware
@@ -62,6 +62,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             await migrations.apply()
         else:
             log.warning("RUN_MIGRATIONS is off — assuming the schema is already at the right version")
+
+        # After the migrations, because it writes into the tables they create. Does nothing
+        # unless the database is empty and the profile is not production.
+        await demo_seed.seed()
 
     # Started after the migrations, never before: the key-expiry sweep reads tables that a fresh
     # deployment does not have until they have run.
