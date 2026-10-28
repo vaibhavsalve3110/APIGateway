@@ -127,8 +127,13 @@ services:
 
   # Java control plane. Owns the schema: Flyway runs here at startup, and backend-python reads the
   # result, so this service must be healthy before the Node one is useful.
+  # RETIRED from the running platform. Everything it owned — the schema, the three scheduled jobs,
+  # Try it live, the Swagger/Postman importer and the demo seeder — is in backend-python now, and
+  # nginx routes nothing here. It is kept on its own profile, so it does not start with the stack,
+  # because twelve test gates still cross-check backend-python against it and that has caught real
+  # defects. Start it only for that:  docker compose --profile app --profile java up -d
   backend-java:
-    profiles: ["app"]
+    profiles: ["java"]
     build: ../backend-java
     restart: unless-stopped
     # host.docker.internal is the developer machine as seen from inside a container. Docker Desktop
@@ -194,17 +199,12 @@ services:
       start_period: 90s
       retries: 10
 
-  # FastAPI control plane, the service routes are being migrated to. Reads the same database; the
-  # schema is migrated by backend-java and never by this service, so it waits for that one to be
-  # healthy before it starts.
+  # The control plane. Owns the schema, the background jobs and every route the platform serves.
   backend-python:
     profiles: ["app"]
     build:
       context: ../backend-python
     restart: unless-stopped
-    depends_on:
-      backend-java:
-        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -290,7 +290,7 @@ services:
     profiles: ["app"]
     image: nginx:1.29-alpine
     restart: unless-stopped
-    depends_on: [backend-java, backend-python, management-portal, developer-portal]
+    depends_on: [backend-python, management-portal, developer-portal]
     ports:
       - "80:80"
       - "443:443"

@@ -15,24 +15,20 @@ flowchart TD
     nginx["<b>nginx :443</b><br/>TLS, and the route map<br/>that picks a backend per path"]
     apisix["APISIX x2<br/>sandbox :9080, prod :9081<br/>key check, rate limit"]
     portals["Two portals<br/>static bundles"]
-    java["backend-java :8088<br/>Flyway owns the schema;<br/>key expiry, OpenAPI import"]
-    python["<b>backend-python :8090</b><br/>every admin route, sign-in,<br/>approvals, 67 of 71 routes"]
+    python["<b>backend-python :8090</b><br/>every route, the schema,<br/>the background jobs"]
     db[("PostgreSQL on the host — one database,<br/>schema apim, shared by both")]
 
     browsers --> nginx
     partners --> apisix
     nginx --> portals
-    nginx --> java
     nginx --> python
     apisix -- "usage batches" --> python
-    java --> db
     python --> db
 ```
 
-Nothing reaches a backend except through nginx, and its route map decides per method and path which
-control plane answers. Both read the same database, so a setting that differs between them is two
-services disagreeing about what the platform allows — which is why the secrets below are shared, not
-per-service.
+Nothing reaches the backend except through nginx. `backend-python` serves every route, owns the
+schema and runs the background jobs; `backend-java` is retired and no longer starts with the stack,
+kept only on its own compose profile for the parity gates.
 
 Four more containers support them: `etcd` (gateway configuration), `valkey` (rate-limit counters),
 two mock upstreams, and a `keycloak` that nothing currently connects to.
@@ -74,16 +70,15 @@ interactively, then put the same value in `DB_PASSWORD` in `infra/.env`:
 psql -U postgres -h localhost -d apigw -c "\password apigw"
 ```
 
-**No tables are created here.** Flyway, inside `backend-java`, creates them in `apim` the first time
-that service starts and records what it has run in `apim.flyway_schema_history`. `backend-python`
-issues no DDL at all, which is why the two never race to create the same table.
+**No tables are created here.** `backend-python` applies the migrations at startup and records what
+it has run in `apim.flyway_schema_history` — the same ledger Flyway used, so the handover from
+`backend-java` needed no migration of state. Set `RUN_MIGRATIONS=false` where migrations are run as
+a separate step before a rollout.
 
-That has one consequence worth knowing before a deployment: **backend-java must start first, or at
-least once, for the schema to exist.** The compose file enforces it — `backend-python` waits for
-`backend-java` to report healthy. A deployment that drops the Java service entirely has to take
-Flyway with it.
+The run holds a PostgreSQL advisory lock, so two instances starting together cannot both decide the
+same file is unapplied.
 
-The migrations live in `backend-java/src/main/resources/db/migration/` and run in order:
+The migrations live in `backend-python/migrations/` and run in order:
 
 | Migration | What it adds |
 | --- | --- |

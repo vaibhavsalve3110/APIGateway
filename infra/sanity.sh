@@ -41,7 +41,7 @@ check "GET /audit"                   200 "${A[@]}" https://admin.apigw.com/api/a
 check "GET /usage/report"            200 "${A[@]}" https://admin.apigw.com/api/admin/usage/report
 check "GET /usage/logs"              200 "${A[@]}" https://admin.apigw.com/api/admin/usage/logs
 
-echo "--- admin API, still served by JAVA"
+echo "--- admin API (every route is backend-python now)"
 check "GET /dashboard"               200 "${A[@]}" https://admin.apigw.com/api/admin/dashboard
 check "GET /errors"                  200 "${A[@]}" https://admin.apigw.com/api/admin/errors
 check "GET /partner-users"           200 "${A[@]}" https://admin.apigw.com/api/admin/partner-users

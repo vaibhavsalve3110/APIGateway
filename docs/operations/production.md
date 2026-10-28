@@ -156,25 +156,21 @@ is ever stored, so a key cannot be recovered — only replaced.
 These are known and unresolved. None is hidden in the code; all of them are cheaper to decide now
 than to discover later.
 
-- [ ] **The approval can be bypassed on the Java port.** The workflow is implemented only in
-      backend-python. nginx routes every API write there and the Java port is not public, but anyone
-      who can reach port 8088 directly can publish without review. Close it at the network, or
-      implement the workflow on both.
-- [ ] **All three scheduled jobs are Java's, and backend-python has no scheduler at all.**
-      `KeyExpiryJob` ends keys at the close of their overlap window, `OtpCleanupJob` clears expired
-      sign-in codes hourly, and `ErrorRetentionJob` prunes the error log on a cron. Without them,
-      replaced keys keep working indefinitely, the OTP table grows without bound, and the error log
-      never ages out. `KEY_EXPIRY_JOB_ENABLED` exists in Python but there is nothing to run it:
-      exactly one service must own each job, and today that is Java for all three.
-- [ ] **Flyway lives in backend-java.** The schema exists only because that service starts. A
-      deployment without it has no migrations.
+- [x] ~~The approval can be bypassed on the Java port~~ — closed. `backend-java` no longer starts
+      with the stack, so there is no second port to reach. It sits on its own compose profile and is
+      brought up only to run the parity gates: `docker compose --profile app --profile java up -d`.
+- [x] ~~All three scheduled jobs are Java's~~ — ported. Key expiry, sign-in code cleanup and
+      error-log retention run in `backend-python`, each tick taking an advisory lock so two
+      instances cannot double-run them. Java never had that guard.
+- [x] ~~Flyway lives in backend-java~~ — ported. `backend-python` applies the same files from
+      `backend-python/migrations/` against the same ledger.
 - [ ] **Mail.** Outbound SMTP is blocked on the current network. Decide between an HTTPS mail
       provider and a network change — without one, nobody can sign in, because a production
       deployment will not return the code in the response.
 - [ ] **Two administrators minimum**, or nothing can ever be published.
-- [ ] **Two endpoints are unported**: `POST /api/admin/apis/import` (Swagger and Postman import) and
-      `/apis/{id}/try` (Try it live). Both are Java's and both work; together with Flyway, the three
-      jobs and the demo seeder they are the reason that service cannot simply be switched off.
+- [x] ~~Two endpoints are unported~~ — ported. The Swagger/Postman importer and Try it live both
+      run in `backend-python`, each proven against Java by feeding both the same input and
+      comparing. The demo seeder moved too.
 - [ ] **Query strings are not encrypted.** A deliberate decision: payload encryption covers bodies
       and responses. Nothing sensitive travels in a query string today — dates, a status, a partner
       id, a search term — but a VAPT tester will ask, and the answer is "by design, and here is what

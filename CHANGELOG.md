@@ -7,6 +7,58 @@ Database changes are Flyway migrations in `backend/src/main/resources/db/migrati
 in order, and are recorded in `apim.flyway_schema_history`. The one-time PostgreSQL setup script is
 `infra/postgres/local-setup.sql`.
 
+## 2026-10-28
+
+### backend-java is retired
+
+Everything it still owned is in `backend-python`, and it no longer starts with the stack. nginx
+routes nothing to it, its port is not listening, and the platform serves every screen without it —
+22 of 22 sanity checks and every admin route answering 200 with the service stopped.
+
+| What moved | Where it is now |
+| --- | --- |
+| Flyway and the nine migrations | `app/migrations.py`, files in `backend-python/migrations/` |
+| Key expiry, sign-in code cleanup, error-log retention | `app/jobs.py` |
+| Try it live | `app/routers/try_it.py` |
+| Swagger / OpenAPI and Postman import | `app/importer.py` |
+| Demo seeder | `app/demo_seed.py` |
+
+**It is kept on its own compose profile rather than deleted**, because twelve gates cross-check
+`backend-python` against it and those comparisons have caught real defects all the way through this
+port — including, this week, a Try-it-live URL that could never have worked and an importer whose
+examples differed by a space. Removing 95 assertions is a separate decision with a real cost, so the
+service stays startable for testing and absent from everything else:
+
+```
+docker compose --profile app --profile java up -d     # only to run the parity gates
+```
+
+Three improvements over what Java did, rather than like-for-like ports:
+
+- **The scheduled jobs take an advisory lock.** Java had no guard at all, so two replicas would have
+  expired every key twice and purged the error log from two transactions at once — and the
+  production sizing calls for two control-plane nodes.
+- **Key expiry withdraws the credential inside the transaction.** Committing first and failing to
+  withdraw leaves the platform believing a key is dead while the gateway still honours it. The other
+  way round costs a partner a few minutes of a key that was about to expire, and the next tick puts
+  the record right.
+- **The importer resolves `$ref` locally only and parses YAML with `safe_load`.** A specification
+  pointing at `http://169.254.169.254/...` would otherwise have the platform fetch a URL of the
+  uploader's choosing from inside the network, and the unsafe YAML loader on an uploaded file is
+  remote code execution. `swagger-parser` does neither of those safely.
+
+Two defects surfaced by porting, both pre-existing and in **both** services:
+
+- `TRY_IT_SANDBOX_URL` defaulted to `localhost:9080` and compose never set it, so Try it live could
+  not have worked in this stack on either control plane. The first run of the new gate found it:
+  Java and Python failed identically.
+- A Swagger 2.0 file declaring no schemes made `swagger-parser` suggest `//host/path`, which the
+  backend-URL field it pre-fills then rejects as invalid. The port emits `https://host/path`.
+
+**After pulling:** `docker compose --profile app up -d --build`. `backend-java` will not start and
+nothing needs it to. The schema is applied by `backend-python` at startup; its ledger is unchanged
+at V9.
+
 ## 2026-10-25
 
 ### The payload keypair could not be configured at all
