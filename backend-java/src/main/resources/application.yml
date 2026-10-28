@@ -72,8 +72,11 @@ apigw:
   security:
     # Header-based sign-in for running without Keycloak. Never enable outside a developer machine.
     dev-auth-enabled: false
+  # Off: backend-python owns all three background jobs now (key expiry, sign-in code cleanup and
+  # error-log retention). Exactly one service must run them — both running them would expire every
+  # key twice and purge the error log from two transactions at once.
   scheduling:
-    enabled: true
+    enabled: false
   try-it:
     # GATEWAY = call the Sandbox gateway; SIMULATE = answer from the documented example (no gateway needed)
     mode: ${TRY_IT_MODE:GATEWAY}

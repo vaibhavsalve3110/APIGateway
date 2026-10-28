@@ -78,10 +78,13 @@ class Settings(BaseSettings):
     key_overlap_minutes: int = Field(default=20, alias="KEY_OVERLAP_MINUTES")
     # Sends the new key itself to the Partner Admins. False sends only the change notice.
     email_key_to_admin: bool = Field(default=True, alias="EMAIL_KEY_TO_ADMIN")
-    # Expiring keys at the end of their overlap window must be ended by exactly one service: both
-    # running it expires them twice, neither running it leaves them live forever. Off here while
-    # backend-java still owns the job.
-    key_expiry_job_enabled: bool = Field(default=False, alias="KEY_EXPIRY_JOB_ENABLED")
+    # The background jobs: key expiry, sign-in code cleanup and error-log retention. This service
+    # owns all three now; backend-java's are switched off. Exactly one service must run them —
+    # both running them expires every key twice, neither running them leaves replaced keys live
+    # forever. Within this service, two instances are safe: each tick takes an advisory lock.
+    #
+    # Turn off only where the jobs are run some other way. Off means keys never stop working.
+    scheduler_enabled: bool = Field(default=True, alias="SCHEDULER_ENABLED")
 
     # --- mail. No host means notices are logged instead of sent, which is how a developer machine
     # behaves and how this network behaves while outbound SMTP is blocked.

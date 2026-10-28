@@ -126,7 +126,9 @@ async def apply() -> int:
             )
 
         rank = (
-            await conn.execute(text("SELECT coalesce(max(installed_rank), 0) AS top FROM flyway_schema_history"))
+            await conn.execute(
+                text("SELECT coalesce(max(installed_rank), 0) AS top FROM flyway_schema_history")
+            )
         ).first().top
 
         for version, description, path in migrations:
