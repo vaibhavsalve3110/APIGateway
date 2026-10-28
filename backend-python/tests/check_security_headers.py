@@ -185,11 +185,30 @@ print("API reference, by profile")
 # Inside the container, not here: this machine has no virtualenv for the service, and the
 # environment that matters is the one that ships. `docker compose exec -e` overrides the profile for
 # that one command without touching the running service.
-PROBE = (
-    "import json;"
-    "import app.main as m;"
-    "print(json.dumps(sorted(getattr(r, 'path', '') for r in m.app.routes)))"
-)
+# Walks the table rather than reading app.routes directly. As of fastapi 0.162 / starlette 1.10,
+# include_router no longer flattens its routes into app.routes — it leaves an _IncludedRouter
+# wrapper, so the top level is four documentation routes, the health check and sixteen opaque
+# wrappers. A flat read still finds the paths this gate is about, which is how it kept passing, but
+# the count it used for its own non-vacuity check silently fell from 71 to 7.
+PROBE = """
+import json
+import app.main as m
+
+stack, seen = [m.app], set()
+while stack:
+    for route in getattr(stack.pop(), "routes", []):
+        path = getattr(route, "path", None)
+        if path:
+            seen.add(path)
+        # `original_router` is how fastapi 0.162's _IncludedRouter holds the router that was
+        # included; `router` and `app` cover a Mount and anything older.
+        for attribute in ("router", "original_router", "app"):
+            inner = getattr(route, attribute, None)
+            if inner is not None and hasattr(inner, "routes"):
+                stack.append(inner)
+                break
+print(json.dumps(sorted(seen)))
+"""
 
 COMPOSE = ["docker", "compose", "-f", str(ROOT.parent / "infra" / "docker-compose.yml"),
            "--profile", "app"]

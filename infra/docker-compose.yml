@@ -21,7 +21,11 @@
 name: apigw
 
 x-apisix: &apisix
-  image: apache/apisix:3.18.0-debian
+  # Built, not pulled: the published image's Debian packages are behind Debian's own patch level,
+  # including openssl. The APISIX version itself is untouched — see apisix-image/Dockerfile.
+  build:
+    context: ./apisix-image
+  image: apigw-apisix:latest
   restart: unless-stopped
   depends_on:
     etcd:
@@ -56,7 +60,12 @@ services:
   valkey:
     image: valkey/valkey:8.1-alpine
     restart: unless-stopped
-    ports: ["6379:6379"]
+    # Loopback only. Published on every interface this was a Redis-compatible store with no
+    # password on 0.0.0.0:6379 — readable and writable by anything on the same network, and a
+    # well-worn route to code execution. It holds the gateways' rate-limit counters; the gateways
+    # reach it by container name on the compose network and do not need a published port at all.
+    # A production deployment needs both a password and a private network.
+    ports: ["127.0.0.1:6379:6379"]
 
   etcd:
     # Official image — the Bitnami etcd image used in most APISIX examples was withdrawn in 2025.
@@ -81,8 +90,8 @@ services:
       APISIX_ETCD_PREFIX: /apisix-sandbox
     volumes: ["./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro"]
     ports:
-      - "9080:9080"   # partner traffic — also fronted by nginx as sandbox-api.apigw.com
-      - "9180:9180"   # Admin API (backend only)
+      - "127.0.0.1:9080:9080"   # partner traffic — normally reached as sandbox-api.apigw.com
+      - "127.0.0.1:9180:9180"   # Admin API — creates routes; guarded only by the admin key
 
   apisix-production:
     <<: *apisix
@@ -91,8 +100,8 @@ services:
       APISIX_ETCD_PREFIX: /apisix-production
     volumes: ["./apisix/config.yaml:/usr/local/apisix/conf/config.yaml:ro"]
     ports:
-      - "9081:9080"   # partner traffic — also fronted by nginx as api.apigw.com
-      - "9181:9180"   # Admin API (backend only)
+      - "127.0.0.1:9081:9080"   # partner traffic — normally reached as api.apigw.com
+      - "127.0.0.1:9181:9180"   # Admin API — creates routes; guarded only by the admin key
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.7.4
@@ -104,7 +113,8 @@ services:
       # Tokens always carry this issuer, whether Keycloak is reached from the browser or from a container.
       KC_HOSTNAME: http://localhost:8180
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
-    ports: ["8180:8080"]
+    # Loopback only: nothing connects to this and its admin password defaults to "admin".
+    ports: ["127.0.0.1:8180:8080"]
     volumes: ["./keycloak/realm-apigw.json:/opt/keycloak/data/import/realm-apigw.json:ro"]
 
   # Stand-ins for the internal core-banking APIs the gateway fronts.
@@ -113,14 +123,14 @@ services:
     restart: unless-stopped
     command: ["--global-response-templating", "--disable-banner"]
     volumes: ["./mocks/sandbox:/home/wiremock"]
-    ports: ["8091:8080"]
+    ports: ["127.0.0.1:8091:8080"]
 
   mock-production:
     image: wiremock/wiremock:3.13.2
     restart: unless-stopped
     command: ["--global-response-templating", "--disable-banner"]
     volumes: ["./mocks/production:/home/wiremock"]
-    ports: ["8092:8080"]
+    ports: ["127.0.0.1:8092:8080"]
 
   # ------------------------------------------------------------------ the platform itself
   # Everything below runs only under --profile app.
@@ -291,7 +301,11 @@ services:
   # certificate from infra/nginx/make-certs.sh and routes by hostname.
   nginx:
     profiles: ["app"]
-    image: nginx:1.29-alpine
+    # Built, not pulled: the published alpine tag carries a long list of already-fixed Alpine
+    # advisories. nginx/Dockerfile is two lines on top of it. See that file.
+    build:
+      context: ./nginx
+    image: apigw-nginx:latest
     restart: unless-stopped
     depends_on: [backend-python, management-portal, developer-portal]
     ports:

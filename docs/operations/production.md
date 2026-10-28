@@ -3,8 +3,10 @@
 The platform runs today under a demo profile with development fallbacks for every secret. This
 document is what has to change, in the order it has to change, and the gaps that are still open.
 
-Companion documents: [configuring the platform](configure.md), and
-[monitoring and error checking](monitoring-and-errors.md).
+Companion documents: [configuring the platform](configure.md),
+[monitoring and error checking](monitoring-and-errors.md), and
+[security scanning](security-scanning.md) — which carries the findings of the last scan and the
+reasoning behind what was not changed.
 
 ## What has to change
 
@@ -83,6 +85,16 @@ anything it does not recognise. A partner's traffic and an administrator's never
 | `sandbox-api.apigw.com` | Sandbox gateway | Partners |
 | `api.apigw.com` | Production gateway | Partners |
 
+**The cipher suites are already narrowed.** nginx offers TLS 1.2 and 1.3 only, and on 1.2 six ECDHE
+AEAD suites and nothing else — no CBC, so LUCKY13 does not apply, and no static-RSA suite, so every
+session has forward secrecy. Server preference is on and session tickets are off, because nginx
+generates a ticket key at start-up and never rotates it, which would undo that forward secrecy.
+Verify after deploying with the real certificate:
+
+```bash
+docker run --rm drwetter/testssl.sh --quiet -p -s -U api.apigw.com:443
+```
+
 **Replace the certificate.** `infra/nginx/make-certs.sh` produces a self-signed CA for local work.
 Production takes a certificate from your usual authority, covering all four names, installed at
 `infra/docker/certs/server.crt` and `server.key` or wherever your deployment mounts them.
@@ -98,9 +110,22 @@ What must be reachable outbound, from the control planes:
   while 443 is open, which is why an HTTPS provider is the safer assumption.
 - The partner backends the gateways forward to.
 
-What must not be reachable: **the control planes' own ports**. In the compose arrangement they are
-published on `127.0.0.1` for the test harness. If port 8088 is reachable in production, the approval
-workflow can be bypassed — see the gaps below.
+What must not be reachable, and in the compose arrangement is now published on `127.0.0.1` only:
+
+| Not reachable | Why |
+| --- | --- |
+| The control plane's own port (8090) | Bypasses nginx, and with it the route map and every response header |
+| Valkey (6379) | A Redis-compatible store **with no password**. Published on all interfaces this was readable and writable by anything on the network, which is a well-worn route to code execution. Production needs `requirepass` as well as a private network |
+| The gateways' Admin API (9180) | Creates routes on the data plane, guarded only by an admin key whose default is `change-me-…` |
+| Keycloak (8180) | Admin password defaults to `admin`, and nothing connects to it |
+| The mock upstreams (8091/8092) | Test servers; they should not exist in production at all |
+
+Only nginx belongs on a public interface. The compose file binds everything else to loopback — check
+it the same way on a real deployment, because a published port is easy to reintroduce:
+
+```bash
+docker compose ps --format '{{.Service}} {{.Ports}}' | grep 0.0.0.0
+```
 
 ## What is hardened, and what the hardening does not cover
 
@@ -151,10 +176,23 @@ the control plane's own port — which is exactly where a scanner reaches it.
 and `/v3/api-docs` are absent from the route table under the production profile — 404, not a guarded
 page. Set it to `true` for a deployment that keeps the port internal and wants the reference.
 
-**Dependencies are pinned and hashed.** `backend-python/requirements.lock` holds all 32 packages the
+**Dependencies are pinned and hashed.** `backend-python/requirements.lock` holds all 34 packages the
 image installs, each with a sha256, and the Dockerfile installs with `--require-hashes`. Two builds
 a month apart now produce the same image, and the SBOM in `sbom/` describes what is actually
 running. Regenerate with `backend-python/tools/relock.sh` after editing `pyproject.toml`.
+
+**The images are built from a current base, not a published tag.** nginx and both gateways are built
+from their upstream image with its OS packages brought to the distribution's patch level, because
+the published tags lag it — `nginx:1.29-alpine` freshly pulled still shipped a curl that Alpine had
+fixed. curl itself is removed from every image that does not need it, which it never did: it was the
+largest single source of unfixed critical advisories in the Python image and in both nginx images.
+`backend-python` sits on Debian 13. The numbers, and what each change was worth, are in
+[security scanning](security-scanning.md).
+
+**No compression on `/api/`.** A compressed response whose length varies with attacker-chosen input
+is the BREACH precondition, and these bodies carry key reveals and IPV salts. It costs nothing here:
+under the production profile they are encrypted envelopes, and ciphertext does not compress. Static
+assets are still compressed.
 
 What this does **not** cover, and nobody should imply otherwise in a report: query strings are still
 unencrypted (deliberate — see the gaps below), there is no metrics endpoint or log shipping, and
@@ -265,8 +303,26 @@ than to discover later.
 - [ ] **No metrics endpoint, no log shipping.** Monitoring is the database and the health probes.
 - [ ] **Keycloak runs and nothing connects to it.** Either drop the service or give it a purpose; an
       unused identity provider with a default password is a finding waiting to happen.
-- [ ] **Vulnerability scanning is not scheduled.** The SBOM in `sbom/` lists what ships; nothing yet
-      checks it against a feed. `grype` reads those files directly.
+- [x] ~~Vulnerability scanning is not scheduled~~ — partly closed. `sbom/scan.sh` runs Grype over
+      every SBOM and **exits non-zero on a *fixable* High or Critical**, which is the line worth
+      failing a build on; a base image's tail of advisories with no fixed version does not make the
+      gate permanently red. It is not yet wired into CI, and that is the remaining step. Cadence,
+      results and the reasoning behind what was left alone: [security scanning](security-scanning.md).
+- [ ] **`backend-java` carries four critical advisories** (`tomcat-embed-core` 11.0.24 → 11.0.25,
+      plus Guava and Jackson) and is why `scan.sh` exits non-zero today. Nothing routes to it and it
+      does not start with the stack, so it is not live exposure — but **deleting the service closes
+      it outright**, at the cost of the 95 cross-check assertions in twelve gates. Still open.
+- [ ] **etcd is nine criticals behind** in the Go standard library and `golang.org/x/net`, fixable
+      only by a newer image — and v3.5.33 is the last of the 3.5 line, so this means etcd 3.6 and a
+      datastore migration. It publishes no port and is reachable only from the gateways.
+- [ ] **The gateways still carry 3 critical / 81 high** with no fixed version at this APISIX patch
+      level. Clearing them means a newer APISIX on a newer base.
+- [ ] **Valkey has no password.** Loopback binding is the right fix for a developer stack; production
+      needs `requirepass` too, and the gateways' `limit-count` configuration has to carry it.
+- [ ] **Notices are sent inside the request.** Concurrent since 2026-10-28, so a key rotation costs
+      one SMTP round trip rather than four, but a hanging mail server still holds the request for up
+      to 20 seconds and a failed notice is lost. The fix is an outbox table drained by the existing
+      job runner, which already has advisory locking.
 
 Two of these are one-line decisions — dropping Keycloak, and choosing a mail provider. The first two
 are architectural and worth settling before a VAPT engagement rather than during one.

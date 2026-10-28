@@ -46,11 +46,15 @@ async def send(recipients: list[str], subject: str, body: str) -> bool:
     for recipient in recipients:
         if recipient and recipient.strip() and recipient not in seen:
             seen.append(recipient)
-    delivered = True
-    for recipient in seen:
-        if not await _send_one(recipient, subject, body):
-            delivered = False
-    return delivered
+    if not seen:
+        return True
+    # Concurrently, not one after another. Each message is its own connect/STARTTLS/auth/send/quit,
+    # which against a real provider measured 6-13 seconds — so a key rotation's four notices took
+    # 30-50 seconds of request time, enough to exceed a client's 30-second timeout and to hold a
+    # worker for the whole of it. `_send_one` already swallows and records its own failures, so
+    # gather cannot raise here; one slow recipient no longer delays the rest.
+    results = await asyncio.gather(*(_send_one(to, subject, body) for to in seen))
+    return all(results)
 
 
 async def _send_one(to: str, subject: str, body: str) -> bool:
@@ -229,6 +233,11 @@ async def notify_key_generated(
     partner_admins = [u.email for u in users if u.role == "PARTNER_ADMIN"]
     everyone = [u.email for u in users]
 
+    # The three notices are assembled first and sent together at the end, rather than awaited one
+    # at a time. Sequentially this was three round trips of several seconds each on top of the
+    # recipients within them, all of it inside the request that issued the key.
+    outgoing: list[tuple[list[str], str, str]] = []
+
     if partner_admins and settings.email_key_to_admin:
         subject, body = key_for_admins(
             partner_name=partner_name,
@@ -239,13 +248,13 @@ async def notify_key_generated(
             plaintext=plaintext,
             overlap=overlap,
         )
-        await send(partner_admins, subject, body)
+        outgoing.append((partner_admins, subject, body))
 
     if everyone:
         subject, body = key_changed_broadcast(
             partner_name=partner_name, partner_code=partner_code, env=env, who=who, overlap=overlap
         )
-        await send(everyone, subject, body)
+        outgoing.append((everyone, subject, body))
 
     if platform_admins:
         previous = (
@@ -262,4 +271,7 @@ async def notify_key_generated(
             masked_key=masked_key,
             previous=previous,
         )
-        await send(platform_admins, subject, body)
+        outgoing.append((platform_admins, subject, body))
+
+    if outgoing:
+        await asyncio.gather(*(send(to, subject, body) for to, subject, body in outgoing))

@@ -1,7 +1,10 @@
 # Software Bill of Materials
 
 CycloneDX 1.7 documents for everything this platform ships and runs, generated with
-[Syft](https://github.com/anchore/syft). Regenerate them with `./generate.sh`.
+[Syft](https://github.com/anchore/syft). Regenerate them with `./generate.sh`, then scan them for
+known vulnerabilities with `./scan.sh` — which exits non-zero on a *fixable* High or Critical. What
+the last scan found, and why some findings were left alone, is in
+[docs/operations/security-scanning.md](../docs/operations/security-scanning.md).
 
 Every file is `*.cdx.json` — valid CycloneDX JSON, which is what a scanner, a licence review or an
 auditor expects to be handed. Nothing here is written by hand.
@@ -16,8 +19,8 @@ auditor expects to be handed. Nothing here is written by hand.
 | `developer-portal.cdx.json` | the `apigw-developer-portal` image | The same for the partner portal |
 | `frontend-npm.cdx.json` | `frontend/package-lock.json` | The npm packages that reach production. **Not in any image**: the portal images contain the compiled bundle, not `node_modules` |
 | `frontend-npm-with-dev.cdx.json` | the same lockfile | The full tree including build-time dependencies — 104 packages against 17. Use this one for supply-chain review, the other for "what runs" |
-| `runtime-nginx.cdx.json` | `nginx:1.29-alpine` | The TLS terminator and router |
-| `runtime-apisix.cdx.json` | `apache/apisix:3.18.0-debian` | Both gateways run this image |
+| `nginx.cdx.json` | the `apigw-nginx` image | The TLS terminator and router. Built from `nginx:1.29-alpine` with its Alpine packages brought current and curl removed — the published tag lags Alpine's own patch level |
+| `apisix.cdx.json` | the `apigw-apisix` image | Both gateways. The published `apache/apisix:3.18.0-debian` with its Debian packages patched; the APISIX version itself is unchanged |
 | `runtime-etcd.cdx.json` | `quay.io/coreos/etcd:v3.5.33` | Gateway configuration store |
 | `runtime-valkey.cdx.json` | `valkey/valkey:8.1-alpine` | Rate-limit counters |
 | `runtime-postgres.cdx.json` | `postgres:17-alpine` | The bundled database image. Not normally running — the platform uses the host's PostgreSQL — but included because it ships with the stack |

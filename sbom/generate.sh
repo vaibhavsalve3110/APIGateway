@@ -39,10 +39,14 @@ scan_image apigw-backend-python:latest   backend-python
 scan_image apigw-backend-java:latest     backend-java
 scan_image apigw-management-portal:latest management-portal
 scan_image apigw-developer-portal:latest developer-portal
+# Built from nginx:1.29-alpine with its Alpine packages brought current — see infra/nginx/Dockerfile.
+# The upstream tag is not scanned separately: nothing runs it.
+scan_image apigw-nginx:latest            nginx
+# The two gateways: the published APISIX image with its Debian packages patched, APISIX itself
+# unchanged. See infra/apisix-image/Dockerfile.
+scan_image apigw-apisix:latest           apisix
 
 echo "Third-party images the stack runs"
-scan_image nginx:1.29-alpine             runtime-nginx
-scan_image apache/apisix:3.18.0-debian   runtime-apisix
 scan_image quay.io/coreos/etcd:v3.5.33   runtime-etcd
 scan_image valkey/valkey:8.1-alpine      runtime-valkey
 scan_image postgres:17-alpine            runtime-postgres

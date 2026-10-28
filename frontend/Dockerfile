@@ -23,6 +23,17 @@ RUN npm run build -w "$APP"
 
 FROM nginx:1.29-alpine
 ARG APP
+
+# The published nginx alpine image ships whatever Alpine packages its own build picked up, and the
+# tag goes stale between nginx releases: scanned on 2026-10-28 it carried 28 critical and 103 high
+# advisories, none of them in nginx itself and all of them already fixed upstream. `upgrade` clears
+# them; `del curl` removes curl and libcurl, which accounted for twenty of the criticals and which
+# nothing in this image — serving static files on port 80 behind the stack's own nginx — has any use
+# for. See infra/nginx/Dockerfile, which does the same for the TLS terminator.
+RUN apk --no-cache upgrade \
+ && apk --no-cache del curl \
+ && nginx -t
+
 COPY --from=build /src/apps/${APP}/dist /usr/share/nginx/html
 COPY infra/nginx/portal.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

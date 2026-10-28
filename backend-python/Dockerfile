@@ -1,5 +1,11 @@
 # Multi-stage: build wheels with the toolchain present, run on a slim image without it.
-FROM python:3.12-slim-bookworm AS build
+#
+# The base is pinned to a Debian release, not to `slim` alone, because the base is where almost all
+# of this image's CVE count comes from. Debian 12 (bookworm) accumulated a long tail of advisories
+# with no fixed version available — six critical ones in libcurl alone — which no amount of
+# dependency pinning touches. Moving to 13 (trixie) clears them, and brings a Python that is itself
+# not on an advisory. Re-check this when scanning: a base image goes stale on its own.
+FROM python:3.13-slim-trixie AS build
 WORKDIR /src
 
 # Dependencies are their own layer, so a source edit does not rebuild every wheel.
@@ -14,16 +20,16 @@ RUN python -m venv /opt/venv \
  && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
  && /opt/venv/bin/pip install --no-cache-dir --require-hashes -r requirements.lock
 
-FROM python:3.12-slim-bookworm
+FROM python:3.13-slim-trixie
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
-# curl is not in the slim image and the compose health check needs it.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/* \
- && useradd --system --uid 10002 apigw
+# No apt install at all. The health check used to need curl, which is not in the slim image — and
+# curl plus libcurl4 were between them the largest single source of unfixed critical advisories in
+# this image, for a binary used once every fifteen seconds to fetch a local URL. The check below
+# does the same thing with the standard library.
+RUN useradd --system --uid 10002 apigw
 
 WORKDIR /app
 COPY --from=build /opt/venv /opt/venv
@@ -35,8 +41,12 @@ COPY migrations ./migrations
 USER apigw
 EXPOSE 8090
 
+# Equivalent to the `curl -fsS` it replaces: urlopen raises on a non-2xx, and anything else that
+# goes wrong exits non-zero too. Deliberately *not* asserting "status":"UP" — the endpoint answers
+# 200 with DOWN while the database is unreachable, on purpose, so a slow database is reported rather
+# than turned into a restart loop.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=5 \
-  CMD curl -fsS http://127.0.0.1:8090/actuator/health || exit 1
+  CMD ["python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8090/actuator/health',timeout=2)"]
 
 # One worker: the service is async and the container is the unit of scaling, so extra worker
 # processes here would only multiply database connections.

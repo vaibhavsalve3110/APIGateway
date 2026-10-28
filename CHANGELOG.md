@@ -9,6 +9,96 @@ one-time PostgreSQL setup script is `infra/postgres/local-setup.sql`.
 
 ## 2026-10-28
 
+### VAPT and SBOM scan, and what it found
+
+Two scans over the whole stack — Grype across twelve SBOMs, plus the running platform's headers,
+TLS, ports and error handling — and the fixes. Both are now repeatable: `sbom/scan.sh`.
+
+**Python dependencies.** `pillow` 11.3.0 carried five critical advisories, `cryptography` 46.0.7
+three high, `starlette` 0.48 three more. Raised to Pillow 13, cryptography 50, and — because
+clearing starlette's three meant 1.3.1 or later — FastAPI 0.162 with starlette 1.10. None of the
+Pillow criticals was reachable: every one is in a decoder (TIFF, FlashPix, JPEG) or the Ghostscript
+shell-out, and this service only ever draws the sign-in CAPTCHA. The cryptography and starlette ones
+were reachable — the bundled OpenSSL, and the ASGI layer every request passes through.
+
+**The base images, which were most of the count.** No application code:
+
+| Image | Before | After | What did it |
+| --- | --- | --- | --- |
+| `backend-python` | 20 critical, 135 high | **0 critical, 55 high** | Debian 12 to 13, and curl removed |
+| `nginx` | 28 critical, 103 high | **1 critical, 1 high** | `apk upgrade`, curl removed |
+| Both portals | 28 critical, 103 high each | **1 critical, 1 high** each | the same |
+| Both gateways | 10 critical, 98 high | **3 critical, 81 high** | `apt upgrade` on the published image |
+| `valkey` | 13 high | **0** | pulling the tag again |
+
+Two things worth keeping hold of:
+
+- **curl was the largest single source of unfixed critical advisories** in the Python image and in
+  both nginx images — present for a health check in one case and for nothing at all in the other.
+  Removing it took twelve criticals out of `backend-python` and twenty out of each nginx image. The
+  health check now does the same job with `urllib`.
+- **Pulling a published tag again does not refresh its packages.** `nginx:1.29-alpine` freshly pulled
+  still shipped curl 8.17.0-r1 against Alpine's 8.22.0-r0, so nginx and the gateways are now *built*
+  from their upstream images — two lines each, in `infra/nginx/Dockerfile` and
+  `infra/apisix-image/Dockerfile`. The APISIX version itself is untouched.
+
+**Ports bound to every interface — the most serious finding, and neither scanner found it.** It came
+from reading `docker compose ps`:
+
+| Service | Was | Why it mattered |
+| --- | --- | --- |
+| `valkey` | `0.0.0.0:6379` | A Redis-compatible store answering `PING` **with no password**, to anything on the network. A well-worn route to code execution |
+| Both gateways' Admin API | `0.0.0.0:9180/9181` | Creates routes on the data plane; guarded only by an admin key defaulting to `change-me-…` |
+| `keycloak` | `0.0.0.0:8180` | Admin password defaults to `admin`, and nothing connects to it |
+| Both mock upstreams | `0.0.0.0:8091/8092` | Test servers with no reason to be on the network |
+
+All four are on `127.0.0.1` now. Only nginx is published on every interface, which is the point of
+having it.
+
+**TLS.** `ssl_ciphers HIGH:!aNULL:!MD5` was too broad in two ways a scan finds at once: CBC suites,
+which is what LUCKY13 is about, and static-RSA AEAD suites, which have no forward secrecy at all.
+Now six ECDHE AEAD suites on TLS 1.2 and nothing else, server preference on, and session tickets off
+— nginx never rotates the ticket key, which would undo the forward secrecy the list was chosen for.
+Re-scanned: LUCKY13 not vulnerable, no CBC, no suite without forward secrecy.
+
+**BREACH.** `gzip off` on both `/api/` locations. The exposure was already weak — authentication is a
+bearer token, not a cookie, so a cross-origin request carries no credentials — but these responses
+carry key reveals and IPV salts, and under the production profile they are encrypted envelopes that
+do not compress anyway. Static assets are still compressed.
+
+**E-mail in the request path.** Surfaced as a gate timing out, not as a scan finding. Key issuance
+sent its four notices sequentially, each a fresh SMTP connection taking 6-13 seconds against a real
+provider — so one rotation held a request for 30-50 seconds and exceeded a 30-second client timeout.
+They now go out concurrently.
+
+**Clean, each checked rather than assumed:** `TRACE`/`TRACK` refused; no cookies anywhere; no
+directory listing and no file exposure (`/.env`, `/.git/config` return the SPA's `index.html`); error
+bodies are problem documents with no stack trace; body limits enforced (413 at 5 MB); the sign-in
+code endpoint sits behind a CAPTCHA before any rate limit; `/internal/usage/batch` is not routed by
+nginx; etcd publishes no port; SSLv2/v3 and TLS 1.0/1.1 not offered; Heartbleed, CCS, Ticketbleed,
+ROBOT, CRIME, POODLE, SWEET32, FREAK, DROWN, LOGJAM, BEAST and Winshock all not vulnerable; `npm
+audit` clean including the build tree; `bandit` no high-severity finding — its 22 "possible SQL
+injection" hits were each checked and every interpolation is a module-level constant or a literal,
+never request data.
+
+**Still open, with reasons, in [docs/operations/security-scanning.md](docs/operations/security-scanning.md):**
+`backend-java`'s four criticals (nothing routes to it; deleting the service is the clean fix and
+costs 95 cross-check assertions), etcd needing a 3.6 migration, the gateways' remaining unfixable
+tail, Valkey having no password, and notices still being sent inside the request.
+
+**New:** `sbom/scan.sh`, which exits non-zero on a **fixable** High or Critical — not on any High,
+because a base image's tail of advisories with no fixed version would make the gate permanently red
+and therefore useless. `docs/operations/security-scanning.md` is the runbook: how to run both scans,
+the cadence, the findings, and the traps.
+
+One of those traps is worth repeating here: an earlier `scan.sh` reported a clean stack twice while
+reading nothing at all, because on Windows the Docker bind mount resolved inside the Docker VM. It
+now exits 2 rather than printing an empty table.
+
+Verified: 18 of 18 gates (519 assertions), 22 of 22 sanity checks, ruff clean, the CAPTCHA still
+rendering under Pillow 13, and the TLS and header scans re-run after each change.
+
+
 ### Security hardening: headers, the banner, the docs, and a lockfile
 
 The five items left over from the VAPT review, done after the migration rather than before it so

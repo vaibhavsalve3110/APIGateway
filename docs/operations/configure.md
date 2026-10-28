@@ -297,7 +297,8 @@ cd backend-python && for f in tests/check_*.py; do .venv/Scripts/python "$f" || 
 | `check_auth` | A sign-in code that survives a wrong guess, or a session one service rejects |
 
 Twelve of the eighteen compare their answers against `backend-java`, which is retired but kept on
-its own compose profile for exactly that. Bring it up first or those comparisons are skipped:
+its own compose profile for exactly that. Bring it up first, or those twelve **fail** — connection
+refused, not a tidy skip:
 
 ```bash
 cd infra && docker compose --profile app --profile java up -d
@@ -311,3 +312,13 @@ cd backend-python && .venv/Scripts/python tests/check_openapi.py
 
 It fails if a route exists with no documented response, which is how the API reference at
 `https://admin.apigw.com/swagger-ui.html` stays honest as routes are added.
+
+## Scanning it
+
+Dependency, image and TLS scanning have their own document, with the last run's findings and the
+reasoning behind what was deliberately not changed: [security scanning](security-scanning.md). The
+short version, after a build:
+
+```bash
+cd sbom && ./generate.sh && ./scan.sh
+```
