@@ -125,7 +125,7 @@ Static assets are still compressed.
 | `valkey` | `0.0.0.0:6379` | `127.0.0.1:6379` | A Redis-compatible store answering `PING` **with no password**, to anything on the same network. A well-worn route to code execution |
 | Both gateways' Admin API | `0.0.0.0:9180/9181` | `127.0.0.1:…` | Creates routes on the data plane; guarded only by an admin key that defaults to `change-me-…` |
 | `keycloak` | `0.0.0.0:8180` | `127.0.0.1:8180` | Admin password defaults to `admin`, and nothing connects to it |
-| Both mock upstreams | `0.0.0.0:8091/8092` | `127.0.0.1:…` | Test servers, no reason to be on the network |
+| Both core-banking stand-ins | `0.0.0.0:8091/8092` | `127.0.0.1:…` | Test servers, no reason to be on the network. Since moved out of this repository entirely |
 
 Only nginx is published on all interfaces now, which is the whole point of having it. The two
 control planes were already on loopback.

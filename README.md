@@ -9,7 +9,7 @@ Management Portal, Developer Portal and gateway configuration for the platform s
 | `frontend/apps/management-portal` | Internal portal for Admin / Editor users (React 19, TypeScript, Vite) |
 | `frontend/apps/developer-portal` | Partner-facing portal |
 | `frontend/packages/ui` | Shared design tokens, components, API client and sign-in |
-| `infra/` | Docker Compose: two APISIX gateways, etcd, Valkey, PostgreSQL, Keycloak, mock core APIs |
+| `infra/` | Docker Compose: two APISIX gateways, etcd, Valkey, PostgreSQL, Keycloak, nginx |
 | `docs/` | [Architecture](docs/architecture.md), [ER diagram](docs/database/er-diagram.md), [BRD traceability](docs/brd-traceability.md) |
 
 ## What works today
@@ -140,7 +140,8 @@ After generating a Sandbox key for Acme in the Developer Portal:
 curl -i http://localhost:9080/v1/accounts/balance -H "Host: sandbox-api.apigw.com" -H "X-Security-Key: agw_sbx_…"
 ```
 
-- **200** from the mock backend, with `X-RateLimit-Remaining` headers.
+- **200** from whatever upstream the API points at, with `X-RateLimit-Remaining` headers. For a
+  demo with no real backend, start the stand-ins in [`../mock-upstreams`](../mock-upstreams).
 - Without the key → **401**.
 - The same key against the Production gateway on :9081 → **401**, because the credential doesn't exist there.
 

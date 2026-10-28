@@ -17,8 +17,8 @@ flowchart LR
     end
     ETCD[(etcd)]
     VK[(Valkey<br/>rate-limit counters)]
-    MS[Core APIs — UAT<br/>mock-sandbox]
-    MPR[Core APIs — Prod<br/>mock-production]
+    MS[Core APIs — UAT<br/>mock-sandbox, own project]
+    MPR[Core APIs — Prod<br/>mock-production, own project]
     PARTNER[Partner systems]
 
     MP -- sign-in --> KC

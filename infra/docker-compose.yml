@@ -117,20 +117,22 @@ services:
     ports: ["127.0.0.1:8180:8080"]
     volumes: ["./keycloak/realm-apigw.json:/opt/keycloak/data/import/realm-apigw.json:ro"]
 
-  # Stand-ins for the internal core-banking APIs the gateway fronts.
-  mock-sandbox:
-    image: wiremock/wiremock:3.13.2
-    restart: unless-stopped
-    command: ["--global-response-templating", "--disable-banner"]
-    volumes: ["./mocks/sandbox:/home/wiremock"]
-    ports: ["127.0.0.1:8091:8080"]
-
-  mock-production:
-    image: wiremock/wiremock:3.13.2
-    restart: unless-stopped
-    command: ["--global-response-templating", "--disable-banner"]
-    volumes: ["./mocks/production:/home/wiremock"]
-    ports: ["127.0.0.1:8092:8080"]
+  # ------------------------------------------------------------------ the core-banking stand-ins
+  #
+  # Gone from here. The two WireMock servers that stood in for the bank's core systems live in
+  # their own project now — ../../mock-upstreams — because they existed only to demonstrate the
+  # platform and nothing here depends on them: with both stopped, all 22 sanity checks and all 18
+  # test gates pass. The upstream URLs that reference them are stored configuration, not calls this
+  # platform makes on its own behalf.
+  #
+  # To bring them back for a demo, start this stack first and then, from that project:
+  #
+  #   docker compose -f docker-compose.yml -f docker-compose.apigw.yml up -d
+  #
+  # That attaches them to this stack's network under the names the seeded APIs point at,
+  # `mock-sandbox` and `mock-production`, so nothing in the database needs changing.
+  #
+  # The last commit that still had them here is on the branch archive/wiremock-mock-upstreams.
 
   # ------------------------------------------------------------------ the platform itself
   # Everything below runs only under --profile app.

@@ -70,7 +70,7 @@ without coordination.
 
 The compose file in `infra/` is a **developer and demo arrangement**, not a production deployment.
 It runs one of everything on one host, publishes the backends on the loopback interface for the test
-harness, and includes two mock upstreams and a Keycloak that nothing uses. For production, take the
+harness, and includes a Keycloak that nothing uses. For production, take the
 images and the environment contract from it and deploy them with whatever you run elsewhere.
 
 ## TLS, DNS and the network
@@ -118,7 +118,7 @@ What must not be reachable, and in the compose arrangement is now published on `
 | Valkey (6379) | A Redis-compatible store **with no password**. Published on all interfaces this was readable and writable by anything on the network, which is a well-worn route to code execution. Production needs `requirepass` as well as a private network |
 | The gateways' Admin API (9180) | Creates routes on the data plane, guarded only by an admin key whose default is `change-me-…` |
 | Keycloak (8180) | Admin password defaults to `admin`, and nothing connects to it |
-| The mock upstreams (8091/8092) | Test servers; they should not exist in production at all |
+| The core-banking stand-ins (8091/8092) | Moved to their own project on 2026-10-28, so they no longer ship with the platform at all. They should never run in production |
 
 Only nginx belongs on a public interface. The compose file binds everything else to loopback — check
 it the same way on a real deployment, because a published port is easy to reintroduce:

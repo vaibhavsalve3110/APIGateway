@@ -31,7 +31,9 @@ schema and runs the background jobs; `backend-java` is retired and no longer sta
 kept only on its own compose profile for the parity gates.
 
 Four more containers support them: `etcd` (gateway configuration), `valkey` (rate-limit counters),
-two mock upstreams, and a `keycloak` that nothing currently connects to.
+and a `keycloak` that nothing currently connects to. The core-banking stand-ins the demo APIs
+point at are a separate project, [`mock-upstreams`](../../../mock-upstreams) — optional, and only
+for a demo with no real backend behind the gateway.
 
 ## Before you start
 
@@ -161,15 +163,21 @@ nginx are all left out and only the support containers start.
 cd infra && docker compose --profile app up -d
 ```
 
-Twelve containers come up. The bundled `postgres` service is behind a second profile and stays down,
+Ten containers come up. The bundled `postgres` service is behind a second profile and stays down,
 because the stack points at the host's database; to use the throwaway container instead, add
 `--profile bundled-db` and set `DB_HOST=postgres`, `DB_SCHEMA=public`.
 
-Watch the one thing that has to happen before anything else works — Flyway creating or updating the
-schema:
+**Pass the same `--profile` flags to every later `docker compose` command.** A `stop`, `rm` or
+`up` issued without them treats the profile-gated services as ones that should not be running and
+stops them — once, here, that took the whole platform down while the intent was to stop two
+containers. When `backend-java` is up for the parity gates, that means
+`--profile app --profile java` every time.
+
+Watch the one thing that has to happen before anything else works — `backend-python` creating or
+updating the schema:
 
 ```bash
-cd infra && docker compose logs backend-java | grep -i "Successfully applied\|Migrating schema"
+cd infra && docker compose logs backend-python | grep -i "migration"
 ```
 
 Then confirm both control planes are up. They are published on the loopback interface only, which is

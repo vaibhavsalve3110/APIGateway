@@ -55,6 +55,12 @@ PLATFORM_USERS = [
 ]
 
 #: (name, category, method, path, backend, status, rate limit, description)
+#
+# The backend URLs point at `mock-sandbox`, the core-banking stand-in that used to live in
+# infra/mocks and is now its own project alongside this one (../../../mock-upstreams). These are
+# stored configuration, not something this service calls: seeding works, and every gate passes,
+# whether or not that project is running. Start it when a demo needs the gateway to return real
+# bodies — it attaches to this stack's network under exactly these names, so nothing here changes.
 APIS = [
     ("Account Balance Enquiry", "Accounts", "GET", "/v1/accounts/balance",
      "http://mock-sandbox:8080/core/balance", "ACTIVE", 120,

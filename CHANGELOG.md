@@ -9,6 +9,42 @@ one-time PostgreSQL setup script is `infra/postgres/local-setup.sql`.
 
 ## 2026-10-28
 
+### The core-banking stand-ins moved to their own project
+
+The two WireMock servers that stood in for the bank's core systems are gone from this repository.
+They are a separate project now, `../mock-upstreams`, with their own compose file, their mappings
+and a README.
+
+They existed only to demonstrate the platform, and **nothing here depends on them** — checked rather
+than assumed: with both stopped, all 22 sanity checks and all 18 test gates pass. The upstream URLs
+that name them are stored configuration, not calls this platform makes on its own behalf. Four gates
+even point at paths the stand-ins never served (`/accounts`, `/core/status`, `/zz`), because what
+those gates assert is how an API is recorded and routed, not what a backend returns.
+
+To bring them back for a demo, start this stack and then, from that project:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.apigw.yml up -d
+```
+
+That overlay attaches them to this stack's network under the names the seeded APIs already point at,
+`mock-sandbox` and `mock-production`, so nothing in the database changes. Verified end to end: a
+container in this stack resolves `mock-sandbox` and gets 200 from it across the project boundary.
+
+**A copy of the last state that still had them here is on the branch
+`archive/wiremock-mock-upstreams`**, at commit `1b1636e`, including `infra/mocks` and both compose
+services.
+
+The default stack is ten containers now. One trap learned the hard way and written into
+[configure.md](docs/operations/configure.md): **pass the same `--profile` flags to every
+`docker compose` command.** A `stop` or `rm` issued without them treats the profile-gated services
+as ones that should not be running — which, while stopping two containers, took the whole platform
+down.
+
+Verified: 18 of 18 gates (519 assertions), 22 of 22 sanity checks, compose valid, and the stand-ins
+confirmed working both standalone and attached.
+
+
 ### VAPT and SBOM scan, and what it found
 
 Two scans over the whole stack — Grype across twelve SBOMs, plus the running platform's headers,
