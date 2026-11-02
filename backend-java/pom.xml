@@ -21,7 +21,49 @@
         <java.version>21</java.version>
         <springdoc.version>3.1.1</springdoc.version>
         <swagger-parser.version>2.1.48</swagger-parser.version>
+        <!--
+          Ahead of what spring-boot-starter-parent 4.1.1 manages (11.0.24), which carries four
+          critical advisories. Spring Boot reads this property, so the override reaches every
+          tomcat-embed-* artifact at once rather than needing one entry each. Drop this line once
+          the parent manages 11.0.25 or later.
+        -->
+        <tomcat.version>11.0.25</tomcat.version>
     </properties>
+
+    <!--
+      Two transitive dependencies with published advisories, both arriving through swagger-parser
+      (swagger-parser -> swagger-parser-v2-converter -> swagger-core 1.6.16). Pinned here rather
+      than excluded, because swagger-core needs them: an exclusion would move a scan finding into a
+      NoClassDefFoundError at the first Swagger 2 import.
+    -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <!--
+                  The `-jre` flavour, where swagger-core asks for `-android`. Guava ships two builds
+                  of every release and the suffix is part of the version string, so "upgrade to
+                  33.7.2" has to pick one — an unsuffixed 33.7.2 does not exist on Central, which is
+                  what a scanner's fix field reports. `-android` targets older Android API levels
+                  and substitutes weaker implementations for some of what it cannot use; this is a
+                  Spring Boot service on Java 21, so `-jre` is the right build and is also the one
+                  Guava marks as its release line.
+                -->
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>33.7.2-jre</version>
+            </dependency>
+            <dependency>
+                <!--
+                  Jackson 2, which swagger-core uses. Distinct from tools.jackson.core:jackson-core,
+                  the Jackson 3 artifact Spring Boot 4 itself is built on — that one is current and
+                  not what the advisory is about.
+                -->
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>2.21.7</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <dependency>

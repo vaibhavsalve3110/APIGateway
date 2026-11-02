@@ -29,6 +29,7 @@ services, so setting one leaves the platform half in production.
 | `PUBLIC_SANDBOX_URL` | the local name | your sandbox URL | Shown to partners as the base URL to call |
 | `TRY_IT_MODE` | `GATEWAY` | `GATEWAY` | `SIMULATE` answers from documentation instead of really calling |
 | `KEYCLOAK_ADMIN_PASSWORD` | `admin` | generated, or drop the service | Nothing connects to Keycloak today |
+| `VALKEY_PASSWORD` | empty (a development value) | `openssl rand -base64 24` | Read by both the valkey container and backend-python. If they disagree the gateway answers 500 on every rate-limited route |
 | `NGINX_HSTS` | empty | `max-age=31536000; includeSubDomains` | Empty means no HSTS header. Empty is correct locally — see below |
 | `DOCS_ENABLED` | unset | unset | Unset follows the profile, which switches the API reference off in production |
 
@@ -308,17 +309,19 @@ than to discover later.
       failing a build on; a base image's tail of advisories with no fixed version does not make the
       gate permanently red. It is not yet wired into CI, and that is the remaining step. Cadence,
       results and the reasoning behind what was left alone: [security scanning](security-scanning.md).
-- [ ] **`backend-java` carries four critical advisories** (`tomcat-embed-core` 11.0.24 → 11.0.25,
-      plus Guava and Jackson) and is why `scan.sh` exits non-zero today. Nothing routes to it and it
-      does not start with the stack, so it is not live exposure — but **deleting the service closes
-      it outright**, at the cost of the 95 cross-check assertions in twelve gates. Still open.
+- [x] ~~`backend-java` carries four critical advisories~~ — patched. `tomcat.version` pinned to
+      11.0.25, Guava and Jackson 2 pinned in `dependencyManagement`; 64 of 64 Java tests pass.
+      Whether the service should exist at all is still open, but it is no longer a security
+      question — only whether 95 cross-check assertions are worth a second service.
 - [ ] **etcd is nine criticals behind** in the Go standard library and `golang.org/x/net`, fixable
       only by a newer image — and v3.5.33 is the last of the 3.5 line, so this means etcd 3.6 and a
       datastore migration. It publishes no port and is reachable only from the gateways.
 - [ ] **The gateways still carry 3 critical / 81 high** with no fixed version at this APISIX patch
       level. Clearing them means a newer APISIX on a newer base.
-- [ ] **Valkey has no password.** Loopback binding is the right fix for a developer stack; production
-      needs `requirepass` too, and the gateways' `limit-count` configuration has to carry it.
+- [x] ~~Valkey has no password~~ — closed. `VALKEY_PASSWORD` is required in every environment and
+      reaches APISIX's `limit-count` plugin as `redis_password`. **Both sides must hold the same
+      value**: a mismatch makes the gateway answer 500 on every rate-limited route rather than
+      quietly dropping the limit. A private network for it is still a deployment decision.
 - [ ] **Notices are sent inside the request.** Concurrent since 2026-10-28, so a key rotation costs
       one SMTP round trip rather than four, but a hanging mail server still holds the request for up
       to 20 seconds and a failed notice is lost. The fix is an outbox table drained by the existing

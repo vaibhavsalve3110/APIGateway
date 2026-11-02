@@ -117,6 +117,32 @@ attack's precondition is missing — but these responses carry key reveals and I
 production profile they are encrypted envelopes that do not compress anyway. It costs nothing.
 Static assets are still compressed.
 
+**Valkey had no password at all** — found by connecting to it, not by a scanner, and the worst of
+the port findings below. It now requires one in *every* environment rather than only in production,
+because "no auth locally" is how a deployment ends up with no auth. `VALKEY_PASSWORD` is read by
+both the valkey container and `backend-python`, which passes it to APISIX's `limit-count` plugin as
+`redis_password`; outside production it falls back to a development value published in this
+repository, exactly as the other secrets do.
+
+Worth knowing before changing it: the two sides **must** agree. A mismatch is not a quiet loss of
+rate limiting — APISIX cannot read the counters and the gateway answers 500 on every call to a
+rate-limited route. `backend-java` has no such property, so if it is ever brought back as a writer
+it needs one added before it publishes anything.
+
+**`backend-java`'s four critical advisories are patched.** `tomcat.version` is pinned to 11.0.25
+ahead of what `spring-boot-starter-parent` 4.1.1 manages, and Guava and Jackson 2 — both arriving
+through `swagger-parser` → `swagger-core` — are pinned in a new `dependencyManagement` block. They
+are pinned rather than excluded, because `swagger-core` needs them: an exclusion would turn a scan
+finding into a `NoClassDefFoundError` on the first Swagger 2 import. 64 of 64 Java tests pass on the
+new versions.
+
+One wrinkle worth recording, because it will recur: **a scanner's "fixed in" version is not always a
+version that exists.** Grype reported Guava `33.7.2`, and no such artifact is published — Guava
+ships `33.7.2-jre` and `33.7.2-android` and the suffix is part of the version string. `swagger-core`
+asks for `-android`, which targets older Android API levels and substitutes weaker implementations
+for some of what it cannot use; this is a Spring Boot service on Java 21, so the pin is `-jre`,
+which is also Guava's own release line.
+
 **Ports bound to every interface.** This was the most serious finding, and it came from reading
 `docker compose ps` rather than from either scanner:
 
@@ -151,10 +177,10 @@ module-level constant or a literal, never request data.
 
 ### Open, with the reason
 
-- **`backend-java` carries four critical advisories** (`tomcat-embed-core` 11.0.24 → 11.0.25, plus
-  Guava and Jackson). Nothing routes to it and it does not start with the stack, so this is not
-  live exposure — but it is why `scan.sh` currently exits non-zero. **Deleting the service closes it
-  outright**, at the cost of the 95 cross-check assertions in twelve gates. That decision is open.
+- **Whether `backend-java` should exist at all.** Its four critical advisories are patched (below),
+  so this is no longer a security question — it is a question of whether 95 cross-check assertions
+  across twelve gates are worth keeping a second service, its compose profile and its 312-component
+  SBOM for, now that the migration is finished. Still open, and deliberately so.
 - **etcd**, nine criticals in the Go standard library and `golang.org/x/net`, fixable only by a newer
   image: v3.5.33 is the last of the 3.5 line, so this means **etcd 3.6**, which is a datastore
   version change with migration consequences. It publishes no port and is reachable only from the
@@ -164,9 +190,8 @@ module-level constant or a literal, never request data.
   as part of a patch pass.
 - **`postgres:17-alpine`**, three criticals in Go binaries inside the image. The platform points at
   the host's PostgreSQL; this image only runs under the `bundled-db` profile.
-- **Valkey has no password.** Loopback binding is the right fix for a developer stack; production
-  needs `requirepass` *and* a private network, and the gateways' `limit-count` configuration has to
-  carry the password.
+- **Valkey needs a private network in production.** The password is now in place (below); the
+  network is a deployment decision rather than something this repository can set.
 - **Notices are still sent inside the request.** Concurrent now, so a rotation costs one round trip
   instead of four, but a hanging mail server still holds the request for up to its 20-second timeout
   and a notice is lost if it fails. The proper fix is an outbox table drained by the existing job

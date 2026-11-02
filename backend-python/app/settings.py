@@ -158,6 +158,12 @@ class Settings(BaseSettings):
     )
     gateway_redis_host: str = Field(default="valkey", alias="GATEWAY_REDIS_HOST")
     gateway_redis_port: int = Field(default=6379, alias="GATEWAY_REDIS_PORT")
+    # Valkey holds the rate-limit counters, and it now requires a password. This value has to match
+    # what the valkey container was started with: APISIX presents it on every limit-count lookup, so
+    # a mismatch is not a quiet degradation — the plugin errors and the gateway answers 500 for
+    # every call on a rate-limited route. Empty means no AUTH is sent, which only works against a
+    # Valkey started without `--requirepass`.
+    gateway_redis_password: str = Field(default="", alias="GATEWAY_REDIS_PASSWORD")
     # Comma-separated; the hostnames each gateway answers on.
     gateway_sandbox_hosts_raw: str = Field(
         default="sandbox-api.apigw.com", alias="GATEWAY_SANDBOX_HOSTS"

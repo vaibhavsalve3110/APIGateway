@@ -60,11 +60,18 @@ services:
   valkey:
     image: valkey/valkey:8.1-alpine
     restart: unless-stopped
-    # Loopback only. Published on every interface this was a Redis-compatible store with no
-    # password on 0.0.0.0:6379 — readable and writable by anything on the same network, and a
-    # well-worn route to code execution. It holds the gateways' rate-limit counters; the gateways
-    # reach it by container name on the compose network and do not need a published port at all.
-    # A production deployment needs both a password and a private network.
+    # Authenticated, always. Until 2026-11-02 this answered with no password at all, and was
+    # published on every interface besides — a Redis-compatible store readable and writable by
+    # anything on the same network, which is a well-worn route to code execution. There is now a
+    # password in every environment rather than only in production, because "no auth locally" is how
+    # a deployment ends up with no auth.
+    #
+    # **This must match GATEWAY_REDIS_PASSWORD on backend-python.** APISIX presents it on every
+    # rate-limit lookup, so a mismatch is not a quiet degradation: the limit-count plugin errors and
+    # the gateway answers 500 for every call on a rate-limited route.
+    command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD:-apigw-local-development-valkey-password}"]
+    # Loopback only. The gateways reach it by container name on the compose network and do not need
+    # a published port at all; it stays published so `valkey-cli` from the host can inspect counters.
     ports: ["127.0.0.1:6379:6379"]
 
   etcd:
@@ -174,6 +181,10 @@ services:
       APISIX_PRODUCTION_ADMIN_URL: http://apisix-production:9180
       APISIX_PRODUCTION_ADMIN_KEY: ${APISIX_PRODUCTION_ADMIN_KEY:-change-me-production-admin-key}
       GATEWAY_REDIS_HOST: valkey
+      # No GATEWAY_REDIS_PASSWORD here: this service has no such property, so a route published
+      # through it would omit redis_password and then answer 500 on every call. It is retired and
+      # nginx sends every write to backend-python, so nothing publishes through it in normal use —
+      # but if it is ever brought back as a writer, that property has to be added first.
       # Where the gateways post their usage batches. They reach the control plane directly rather
       # than through nginx, so this variable -- not an nginx line -- is what moves this one route
       # between the services, and what moves it back.
@@ -245,6 +256,10 @@ services:
       APISIX_PRODUCTION_ADMIN_URL: http://apisix-production:9180
       APISIX_PRODUCTION_ADMIN_KEY: ${APISIX_PRODUCTION_ADMIN_KEY:-change-me-production-admin-key}
       GATEWAY_REDIS_HOST: valkey
+      # Must match what the valkey service was started with. APISIX presents this on every
+      # rate-limit lookup, so a mismatch makes the gateway answer 500 on every rate-limited route
+      # rather than quietly skipping the limit.
+      GATEWAY_REDIS_PASSWORD: ${VALKEY_PASSWORD:-apigw-local-development-valkey-password}
       GATEWAY_SANDBOX_HOSTS: sandbox-api.apigw.com
       GATEWAY_PRODUCTION_HOSTS: api.apigw.com
       # Mail. These were missing entirely until 2026-10-21, so this service fell back to its

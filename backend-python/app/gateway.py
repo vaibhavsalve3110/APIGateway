@@ -111,6 +111,10 @@ def route(api: dict[str, Any], environment: str, settings: Settings) -> dict[str
             "show_limit_quota_header": True,
         },
     }
+    # Only when there is one: APISIX's schema rejects an empty redis_password, so sending the key
+    # with a blank value would fail every route publish rather than simply skipping AUTH.
+    if settings.gateway_redis_password:
+        plugins["limit-count"]["redis_password"] = settings.gateway_redis_password
     path_rewrite = rewrite(api["proxyPath"], path)
     if path_rewrite is not None:
         plugins["proxy-rewrite"] = path_rewrite

@@ -7,6 +7,50 @@ Database changes are SQL migrations in `backend-python/migrations/`; `backend-py
 startup, in order, under an advisory lock, and records them in `apim.flyway_schema_history`. The
 one-time PostgreSQL setup script is `infra/postgres/local-setup.sql`.
 
+## 2026-11-02
+
+### Valkey requires a password, and backend-java's criticals are patched
+
+Two of the open items from the 28 October scan.
+
+**Valkey had no password at all.** It answered `PING` to anything that could reach it, which until
+28 October was anything on the network. Loopback binding narrowed that; this closes it. There is now
+a password in **every** environment rather than only in production, because "no auth locally" is how
+a deployment ends up with no auth — `VALKEY_PASSWORD`, read by both the container and
+`backend-python`, which passes it to APISIX's `limit-count` plugin as `redis_password`. Outside
+production it falls back to a development value published in this repository, exactly as the other
+secrets do.
+
+**The two sides must agree**, and the failure mode is worth knowing before anyone changes it: a
+mismatch is not a quiet loss of rate limiting. APISIX cannot read the counters and the gateway
+answers 500 on every call to a rate-limited route. `backend-java` has no such property — it is
+retired and nginx sends every write to `backend-python`, so nothing publishes through it, but if it
+is ever brought back as a writer the property has to be added first. That is noted next to its
+environment block.
+
+**backend-java's four critical advisories are patched.** `tomcat.version` is pinned to 11.0.25,
+ahead of what `spring-boot-starter-parent` 4.1.1 manages, and Guava and Jackson 2 — both arriving
+through `swagger-parser` → `swagger-core` — are pinned in a new `dependencyManagement` block. Pinned
+rather than excluded: `swagger-core` needs them, and an exclusion would turn a scan finding into a
+`NoClassDefFoundError` on the first Swagger 2 import. **64 of 64 Java tests pass.**
+
+This deliberately does not settle whether `backend-java` should exist. It removes the security
+argument for deleting it, leaving the real question — whether 95 cross-check assertions across
+twelve gates are worth a second service, its compose profile and its 312-component SBOM now the
+migration is finished — as an open decision rather than one forced by a CVE.
+
+One wrinkle worth recording because it will recur: **a scanner's "fixed in" version is not always a
+version that exists.** Grype reported Guava `33.7.2`; no such artifact is published. Guava ships
+`33.7.2-jre` and `33.7.2-android`, and the suffix is part of the version string. `swagger-core` asks
+for `-android`, which targets older Android API levels and substitutes weaker implementations for
+some of what it cannot use, so the pin is `-jre` — the right build for a Spring Boot service on Java
+21, and Guava's own release line.
+
+Verified: 64 of 64 Java tests on the new versions, ruff clean, both compose profiles validate.
+**Not yet verified:** the Valkey change against a running stack, and a rescan of the rebuilt Java
+image. Docker Desktop's privileged service will not start without elevation on this machine, so both
+are pending — the gates and `sbom/scan.sh` are the checks to run once it is up.
+
 ## 2026-10-28
 
 ### The core-banking stand-ins moved to their own project
